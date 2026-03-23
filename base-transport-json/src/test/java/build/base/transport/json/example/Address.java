@@ -1,0 +1,76 @@
+package build.base.transport.json.example;
+
+/*-
+ * #%L
+ * base.build Transport (JSON)
+ * %%
+ * Copyright (C) 2025 Workday Inc
+ * %%
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * #L%
+ */
+
+import build.base.marshalling.Marshal;
+import build.base.marshalling.Marshalling;
+import build.base.marshalling.Out;
+import build.base.marshalling.Unmarshal;
+
+import java.lang.invoke.MethodHandles;
+import java.util.Objects;
+
+/**
+ * A marshallable class with multiple parameters.
+ *
+ * @author brian.oliver
+ * @since Nov-2024
+ */
+public class Address {
+
+    private final String street;
+    private final String city;
+
+    @Unmarshal
+    public Address(final String street,
+                   final String city) {
+        this.street = street;
+        this.city = city;
+    }
+
+    @Marshal
+    public void destructor(final Out<String> street,
+                           final Out<String> city) {
+
+        street.set(this.street);
+        city.set(this.city);
+    }
+
+    @Override
+    public boolean equals(final Object object) {
+        if (this == object) {
+            return true;
+        }
+        if (!(object instanceof final Address address)) {
+            return false;
+        }
+        return Objects.equals(this.street, address.street) && Objects.equals(this.city, address.city);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.street, this.city);
+    }
+
+    static {
+        Marshalling.register(Address.class, MethodHandles.lookup());
+    }
+}

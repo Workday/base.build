@@ -1,0 +1,69 @@
+package build.base.flow;
+
+/*-
+ * #%L
+ * base.build Flow
+ * %%
+ * Copyright (C) 2025 Workday Inc
+ * %%
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * #L%
+ */
+
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+
+/**
+ * A {@code java.util.logging} {@link Handler} that published {@link LogRecord}s.
+ *
+ * @author brian.oliver
+ * @since Nov-2024
+ */
+public class LogRecordPublisher
+    extends Handler
+    implements Publisher<LogRecord> {
+
+    /**
+     * The {@link SubscriberRegistry} of {@link Subscriber}s.
+     */
+    private final SubscriberRegistry<LogRecord> subscribers;
+
+    /**
+     * Constructs a new {@link LogRecordPublisher}.
+     */
+    public LogRecordPublisher() {
+        this.subscribers = new SubscriberRegistry<>();
+    }
+
+    @Override
+    public void subscribe(final Subscriber<? super LogRecord> subscriber) {
+        this.subscribers.subscribe(subscriber);
+    }
+
+    @Override
+    public void publish(final LogRecord record) {
+        this.subscribers.publish(record);
+    }
+
+    @Override
+    public void flush() {
+        // there's nothing to flush as publishing occurs immediately
+    }
+
+    @Override
+    public void close()
+        throws SecurityException {
+
+        this.subscribers.complete();
+    }
+}

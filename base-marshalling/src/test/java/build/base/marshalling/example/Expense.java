@@ -1,0 +1,70 @@
+package build.base.marshalling.example;
+
+/*-
+ * #%L
+ * base.build Marshalling
+ * %%
+ * Copyright (C) 2025 Workday Inc
+ * %%
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * #L%
+ */
+
+import build.base.marshalling.Marshal;
+import build.base.marshalling.Marshalled;
+import build.base.marshalling.Marshaller;
+import build.base.marshalling.Out;
+import build.base.marshalling.Unmarshal;
+
+import java.util.ArrayList;
+import java.util.stream.Stream;
+
+/**
+ * An expense made up of {@link ExpenseLine}s.
+ *
+ * @author brian.oliver
+ * @since Dec-2024
+ */
+public class Expense {
+
+    private final ArrayList<ExpenseLine> expenseLines;
+
+    public Expense() {
+        this.expenseLines = new ArrayList<>();
+    }
+
+    @Unmarshal
+    public Expense(final Marshaller marshaller,
+                   final Stream<Marshalled<ExpenseLine>> expenseLines) {
+
+        this();
+
+        marshaller.bind(this).universally();
+
+        expenseLines.forEach(marshalled -> add(marshaller.unmarshal(marshalled)));
+    }
+
+    @Marshal
+    public void destructor(final Marshaller marshaller,
+                           final Out<Stream<Marshalled<ExpenseLine>>> expenseLines) {
+
+        expenseLines.set(this.expenseLines.stream()
+            .map(marshaller::marshal));
+    }
+
+    public void add(final ExpenseLine expenseLine) {
+        if (expenseLine != null) {
+            this.expenseLines.add(expenseLine);
+        }
+    }
+}

@@ -1,0 +1,58 @@
+package build.base.option;
+
+/*-
+ * #%L
+ * base.build Option
+ * %%
+ * Copyright (C) 2025 Workday Inc
+ * %%
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * #L%
+ */
+
+import build.base.configuration.AbstractValueOption;
+import build.base.configuration.ValueOption;
+
+/**
+ * {@link ValueOption} used to specify a password when communicating across networks.
+ *
+ * @author brian.oliver
+ * @since Sep-2021
+ */
+public class Password
+    extends AbstractValueOption<String> {
+
+    /**
+     * Creates a new {@link Password} from a {@link String}.
+     *
+     * @param password the password being created.
+     */
+    private Password(final String password) {
+        super(password);
+    }
+
+    /**
+     * Creates a new {@link Password}.
+     *
+     * @param password the password to be used
+     * @return a {@link Password} containing the password provided
+     */
+    public static Password of(final String password) {
+        return new Password(password);
+    }
+
+    @Override
+    public String toString() {
+        return "Password{...}";
+    }
+}

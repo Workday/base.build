@@ -1,0 +1,83 @@
+package build.base.marshalling.tutorial;
+
+/*-
+ * #%L
+ * base.build Marshalling
+ * %%
+ * Copyright (C) 2025 Workday Inc
+ * %%
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * #L%
+ */
+
+import build.base.marshalling.Bound;
+import build.base.marshalling.Marshal;
+import build.base.marshalling.Marshalling;
+import build.base.marshalling.Out;
+import build.base.marshalling.Unmarshal;
+
+import java.lang.invoke.MethodHandles;
+import java.util.Objects;
+
+/**
+ * A marshallable validated address.
+ *
+ * @author brian.oliver
+ * @since Jan-2025
+ */
+public class ValidatedAddress {
+
+    private final String street;
+    private final String city;
+
+    @Unmarshal
+    public ValidatedAddress(@Bound final CityPredicate cityPredicate,
+                            final String street,
+                            final String city) {
+
+        Objects.requireNonNull(cityPredicate, "The CityPredicate must not be null");
+
+        // ensure the city is valid otherwise we don't create the address!
+        if (!cityPredicate.test(city)) {
+            throw new IllegalArgumentException("The City [" + city + "] is invalid");
+        }
+
+        this.street = street;
+        this.city = city;
+    }
+
+    @Marshal
+    public void destructor(final Out<String> street,
+                           final Out<String> city) {
+
+        street.set(this.street);
+        city.set(this.city);
+    }
+
+    @Override
+    public boolean equals(final Object object) {
+        if (this == object) {
+            return true;
+        }
+        if (!(object instanceof final ValidatedAddress address)) {
+            return false;
+        }
+        return Objects.equals(this.street, address.street)
+            && Objects.equals(this.city, address.city);
+    }
+
+    static {
+        // self-register this type when it's initialized
+        Marshalling.register(ValidatedAddress.class, MethodHandles.lookup());
+    }
+}
