@@ -18,7 +18,7 @@
         <url>https://www.workday.com</url>
     </organization>
 
-    <inceptionYear>2025</inceptionYear>
+    <inceptionYear>2026</inceptionYear>
 
     <licenses>
         <license>
@@ -26,6 +26,32 @@
             <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
         </license>
     </licenses>
+
+    <developers>
+        <developer>
+            <name>Brian Oliver</name>
+            <email>brian.oliver@workday.com</email>
+            <roles>
+                <role>architect</role>
+                <role>developer</role>
+            </roles>
+        </developer>
+
+        <developer>
+            <name>Reed von Redwitz</name>
+            <email>reed.vonredwitz@workday.com</email>
+            <roles>
+                <role>architect</role>
+                <role>developer</role>
+            </roles>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/workday/base.build.git</connection>
+        <developerConnection>scm:git:https://github.com/workday/base.build.git</developerConnection>
+        <url>https://github.com/workday/base.build</url>
+    </scm>
 
     <properties>
         <!-- Project and Module Versions -->
@@ -53,9 +79,11 @@
 
         <!-- Plugin Dependency Versions -->
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
+        <maven-central-publishing-plugin.version>0.10.0</maven-central-publishing-plugin.version>
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
         <maven-enforcer-plugin.version>3.6.2</maven-enforcer-plugin.version>
         <maven-flatten-plugin.version>1.7.3</maven-flatten-plugin.version>
+        <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
         <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
         <maven-license-plugin.version>2.7.1</maven-license-plugin.version>
         <maven-resources-plugin.version>3.4.0</maven-resources-plugin.version>
@@ -64,34 +92,30 @@
     </properties>
 
     <modules>
-        <module>base-foundation</module>
-        <module>base-logging</module>
-        <module>base-retryable</module>
+        <module>base-archiving</module>
         <module>base-assertion</module>
-        <module>base-flow</module>
-        <module>base-expression</module>
-        <module>base-configuration</module>
-        <module>base-option</module>
         <module>base-commandline</module>
-        <module>base-table</module>
+        <module>base-configuration</module>
+        <module>base-expression</module>
+        <module>base-flow</module>
+        <module>base-foundation</module>
         <module>base-io</module>
+        <module>base-logging</module>
         <module>base-marshalling</module>
-        <module>base-transport</module>
-        <module>base-transport-json</module>
-        <module>base-naming</module>
         <module>base-mereology</module>
+        <module>base-naming</module>
+        <module>base-network</module>
+        <module>base-option</module>
         <module>base-parsing</module>
         <module>base-query</module>
-        <module>base-archiving</module>
-        <module>base-network</module>
+        <module>base-retryable</module>
+        <module>base-table</module>
         <module>base-telemetry</module>
-        <module>base-telemetry-foundation</module>
         <module>base-telemetry-ansi</module>
+        <module>base-telemetry-foundation</module>
+        <module>base-transport</module>
+        <module>base-transport-json</module>
     </modules>
-
-    <scm>
-        <developerConnection>scm:git:https://github.com/Workday/base.build.git</developerConnection>
-    </scm>
 
     <dependencyManagement>
         <!-- Force Certain Dependencies to use Specific Versions for Java Platform -->
@@ -281,8 +305,48 @@
                     </execution>
                 </executions>
             </plugin>
+
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>deploy</id>
+            <activation>
+                <property>
+                    <name>env.MAVEN_PUBLISH</name>
+                    <value>true</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven-gpg-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals><goal>sign</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${maven-central-publishing-plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <reporting>
         <plugins>
