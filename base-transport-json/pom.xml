@@ -14,6 +14,7 @@
     <artifactId>base-transport-json</artifactId>
 
     <name>base.build Transport (JSON)</name>
+    <description>JSON transport implementation using Jackson Core for encoding and decoding.</description>
 
     <dependencies>
         <dependency>

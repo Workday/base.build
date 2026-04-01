@@ -14,6 +14,7 @@
     <artifactId>base-naming</artifactId>
 
     <name>base.build Naming</name>
+    <description>Naming utilities for consistent identifier and resource name conventions.</description>
 
     <dependencies>
         <dependency>

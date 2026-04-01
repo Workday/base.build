@@ -14,6 +14,7 @@
     <artifactId>base-commandline</artifactId>
 
     <name>base.build Command Line</name>
+    <description>Type-safe command-line argument parsing and CLI option binding.</description>
 
     <dependencies>
         <dependency>

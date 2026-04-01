@@ -14,6 +14,7 @@
     <artifactId>base-archiving</artifactId>
 
     <name>base.build Archiving</name>
+    <description>Archiving utilities providing TAR archive creation and extraction support.</description>
 
     <dependencies>
         <dependency>

@@ -14,6 +14,7 @@
     <artifactId>base-option</artifactId>
 
     <name>base.build Option</name>
+    <description>Type-safe Option types for configuration and parameter binding.</description>
 
     <dependencies>
         <dependency>

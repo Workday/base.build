@@ -14,6 +14,7 @@
     <artifactId>base-mereology</artifactId>
 
     <name>base.build Mereology</name>
+    <description>Whole-part hierarchy traversal for composite object structures.</description>
 
     <dependencies>
         <dependency>

@@ -14,6 +14,7 @@
     <artifactId>base-assertion</artifactId>
 
     <name>base.build Assertion</name>
+    <description>Assertion utilities and matchers built on AssertJ for testing.</description>
 
     <dependencies>
         <dependency>

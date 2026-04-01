@@ -14,6 +14,7 @@
     <artifactId>base-network</artifactId>
 
     <name>base.build Network</name>
+    <description>Network utilities for socket, address, and connection management.</description>
 
     <dependencies>
         <dependency>

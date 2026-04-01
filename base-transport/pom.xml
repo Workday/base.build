@@ -14,6 +14,7 @@
     <artifactId>base-transport</artifactId>
 
     <name>base.build Transport</name>
+    <description>Transport abstraction for serialization-based message encoding and decoding.</description>
 
     <dependencies>
         <dependency>

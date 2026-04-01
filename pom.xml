@@ -12,6 +12,8 @@
     <packaging>pom</packaging>
 
     <name>base.build Project</name>
+    <description>A Java-based multi-module project providing foundational utilities for configuration, marshalling, reactive flow, telemetry, networking, and more.</description>
+    <url>https://github.com/Workday/base.build</url>
 
     <organization>
         <name>Workday, Inc.</name>
@@ -188,6 +190,7 @@
                 <artifactId>flatten-maven-plugin</artifactId>
                 <version>${maven-flatten-plugin.version}</version>
                 <configuration>
+                    <flattenMode>ossrh</flattenMode>
                     <updatePomFile>true</updatePomFile>
                 </configuration>
                 <executions>
