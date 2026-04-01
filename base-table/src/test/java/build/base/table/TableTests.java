@@ -152,6 +152,16 @@ class TableTests {
     }
 
     /**
+     * Ensure {@link Table#getRow} returns null for an out-of-bounds index equal to the row count.
+     */
+    @Test
+    void getRowShouldReturnNullForIndexEqualToSize() {
+        final var table = Table.of(Row.of("only"));
+
+        assertThat(table.getRow(1)).isNull();
+    }
+
+    /**
      * Ensure irregularly shaped {@link Table}s, with different numbers of cells per row, can be output.
      */
     @Test

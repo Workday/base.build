@@ -352,7 +352,7 @@ public class JsonTransport
         }
 
         // determine the Schemas, their Parameters and corresponding Out values that are candidates for unmarshalling
-        final var schemas = this.schemaFactory.getUnmashallingSchemas(typeClass)
+        final var schemas = this.schemaFactory.getUnmarshallingSchemas(typeClass)
             .map(schema -> Pair.of(
                 schema,
                 schema.parameters().stream()

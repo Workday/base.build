@@ -33,7 +33,7 @@ import java.lang.annotation.Target;
  * @see Marshal
  * @since Nov-2024
  */
-@Target({ ElementType.METHOD, ElementType.CONSTRUCTOR })
+@Target(ElementType.CONSTRUCTOR)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Unmarshal {
 

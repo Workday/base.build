@@ -107,12 +107,12 @@ public class RetryFrequency
         Objects.requireNonNull(floor, "floor can't be null");
         Objects.requireNonNull(ceiling, "ceiling can't be null");
 
-        if (!floor.isNegative()) {
-            throw new IllegalArgumentException("floor must be positive");
+        if (floor.isNegative()) {
+            throw new IllegalArgumentException("floor must not be negative");
         }
 
-        if (ceiling.compareTo(floor) >= 0) {
-            throw new IllegalArgumentException("ceiling must be greater than floor");
+        if (ceiling.compareTo(floor) < 0) {
+            throw new IllegalArgumentException("ceiling must be greater than or equal to floor");
         }
 
         final RetryFrequency frequency = this;
@@ -163,7 +163,7 @@ public class RetryFrequency
      * @return the new frequency, or {@code this} if limit == {@link Long#MAX_VALUE}.
      */
     public RetryFrequency maxRetriesOf(final long limit) {
-        if (limit <= 0) {
+        if (limit < 0) {
             throw new IllegalArgumentException("limit can't be negative");
         }
 

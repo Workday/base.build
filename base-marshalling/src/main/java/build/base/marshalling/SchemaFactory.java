@@ -69,7 +69,7 @@ public interface SchemaFactory {
      * @param <T>               the type of <i>marshallable</i> {@link Class}
      * @return the {@link Optional} {@link Schema} or {@link Optional#empty()} if no such registration exists
      */
-    <T> Optional<Schema<T>> getMashallingSchema(Class<T> marshallableClass);
+    <T> Optional<Schema<T>> getMarshallingSchema(Class<T> marshallableClass);
 
     /**
      * Obtains the {@link Schema} that can be used to unmarshal the specified {@link Class}.
@@ -78,7 +78,7 @@ public interface SchemaFactory {
      * @param <T>               the type of <i>marshallable</i> {@link Class}
      * @return the {@link Stream} of {@link Schema} for unmarshalling the specified {@link Class}
      */
-    <T> Stream<Schema<T>> getUnmashallingSchemas(Class<T> marshallableClass);
+    <T> Stream<Schema<T>> getUnmarshallingSchemas(Class<T> marshallableClass);
 
     /**
      * Determine if the specified {@link Class} is marshallable.

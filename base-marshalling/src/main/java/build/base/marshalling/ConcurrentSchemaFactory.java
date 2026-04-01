@@ -228,6 +228,20 @@ public class ConcurrentSchemaFactory
             marshalParameters.stream()));
 
         // -----------
+        // fail fast if @Unmarshal is mistakenly placed on a method (only constructors are supported)
+        final var unmarshalMethods = Stream.of(marshallableClass.getDeclaredMethods())
+            .filter(method -> method.isAnnotationPresent(Unmarshal.class))
+            .toList();
+
+        if (!unmarshalMethods.isEmpty()) {
+            this.unmarshallableClasses.add(marshallableClass);
+            throw new IllegalArgumentException("The class " + marshallableClass.getName()
+                + " has @Unmarshal on method(s) " + unmarshalMethods.stream()
+                    .map(Method::getName).toList()
+                + " — @Unmarshal is only supported on constructors");
+        }
+
+        // -----------
         // discover the @Unmarshal annotated Constructors (there may be many)
         final var unmarshallConstructors = Stream.of(marshallableClass.getDeclaredConstructors())
             .filter(constructor -> constructor.isAnnotationPresent(Unmarshal.class))
@@ -323,7 +337,7 @@ public class ConcurrentSchemaFactory
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Optional<Schema<T>> getMashallingSchema(final Class<T> marshallableClass) {
+    public <T> Optional<Schema<T>> getMarshallingSchema(final Class<T> marshallableClass) {
 
         if (marshallableClass == null) {
             return Optional.empty();
@@ -336,7 +350,7 @@ public class ConcurrentSchemaFactory
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Stream<Schema<T>> getUnmashallingSchemas(final Class<T> marshallableClass) {
+    public <T> Stream<Schema<T>> getUnmarshallingSchemas(final Class<T> marshallableClass) {
 
         if (marshallableClass == null) {
             return Stream.empty();

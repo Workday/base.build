@@ -171,7 +171,7 @@ public class Table
      * @return the {@link Row} at the specified index, or <code>null</code>
      */
     public Row getRow(final int index) {
-        return index < 0 || index > this.rows.size() ? null : this.rows.get(index);
+        return index < 0 || index >= this.rows.size() ? null : this.rows.get(index);
     }
 
     @Override
