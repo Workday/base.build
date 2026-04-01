@@ -1,7 +1,6 @@
 package build.base.retryable;
 
 import build.base.retryable.option.RetryFrequency;
-
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
