@@ -100,7 +100,7 @@ jobs:
 
       - name: Open and Merge PR to main
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           PR_URL=$(gh pr create \
             --base main \
@@ -108,4 +108,4 @@ jobs:
             --title "Release ${{ steps.versions.outputs.release-version }}" \
             --body "Merges release **${{ steps.versions.outputs.release-version }}** and prepares next development iteration **${{ steps.versions.outputs.next-version }}**.")
 
-          gh pr merge "$PR_URL" --squash --admin --delete-branch
+          gh pr merge "$PR_URL" --squash --delete-branch
