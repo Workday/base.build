@@ -81,7 +81,7 @@ jobs:
         run: |
           git add pom.xml
           git commit -m "Release ${{ steps.versions.outputs.release-version }}"
-          git tag v${{ steps.versions.outputs.release-version }}
+          git tag -a v${{ steps.versions.outputs.release-version }} -m "Release ${{ steps.versions.outputs.release-version }}"
 
       - name: Set Next Development Version
         run: |
@@ -105,7 +105,7 @@ jobs:
           PR_URL=$(gh pr create \
             --base main \
             --head release-${{ steps.versions.outputs.release-version }} \
-            --title "Release ${{ steps.versions.outputs.release-version }}" \
-            --body "Merges release **${{ steps.versions.outputs.release-version }}** and prepares next development iteration **${{ steps.versions.outputs.next-version }}**.")
+            --title "Prepare for development of ${{ steps.versions.outputs.next-version }}" \
+            --body "Prepares next development iteration **${{ steps.versions.outputs.next-version }}**.")
 
-          gh pr merge "$PR_URL" --squash --delete-branch
+          gh pr merge "$PR_URL" --squash
