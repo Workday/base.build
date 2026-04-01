@@ -108,4 +108,4 @@ jobs:
             --title "Release ${{ steps.versions.outputs.release-version }}" \
             --body "Merges release **${{ steps.versions.outputs.release-version }}** and prepares next development iteration **${{ steps.versions.outputs.next-version }}**.")
 
-          gh pr merge "$PR_URL" --squash --auto --delete-branch
+          gh pr merge "$PR_URL" --squash --admin --delete-branch
