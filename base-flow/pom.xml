@@ -14,6 +14,7 @@
     <artifactId>base-flow</artifactId>
 
     <name>base.build Flow</name>
+    <description>Custom reactive Publish/Subscribe framework for asynchronous event processing.</description>
 
     <dependencies>
         <dependency>

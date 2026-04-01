@@ -14,6 +14,7 @@
     <artifactId>base-configuration</artifactId>
 
     <name>base.build Configuration</name>
+    <description>Type-safe Configuration and Option management.</description>
 
     <dependencies>
         <dependency>

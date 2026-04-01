@@ -14,6 +14,7 @@
     <artifactId>base-foundation</artifactId>
 
     <name>base.build Foundation</name>
+    <description>Core utilities including Lazy, Capture, Exceptional, Streamable, iterators, and a matching DSL.</description>
 
     <dependencies>
         <!-- Test Dependencies -->

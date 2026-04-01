@@ -14,6 +14,7 @@
     <artifactId>base-io</artifactId>
 
     <name>base.build IO</name>
+    <description>I/O utilities for reading and writing streams, files, and resources.</description>
 
     <dependencies>
         <dependency>
