@@ -44,7 +44,7 @@ class MarshallingTests {
         final var schemaFactory = Marshalling.globalSchemaFactory();
 
         final var marshallingSchema = schemaFactory
-            .getMashallingSchema(StaticallyRegisteredPoint.class)
+            .getMarshallingSchema(StaticallyRegisteredPoint.class)
             .orElseThrow();
 
         assertThat(schemaFactory.isMarshallable(StaticallyRegisteredPoint.class))
@@ -69,10 +69,10 @@ class MarshallingTests {
             .map(Parameter::type))
             .allMatch(Integer.class::equals);
 
-        assertThat(schemaFactory.getUnmashallingSchemas(StaticallyRegisteredPoint.class))
+        assertThat(schemaFactory.getUnmarshallingSchemas(StaticallyRegisteredPoint.class))
             .hasSize(1);
 
-        final var unmashallingSchema = schemaFactory.getUnmashallingSchemas(StaticallyRegisteredPoint.class)
+        final var unmashallingSchema = schemaFactory.getUnmarshallingSchemas(StaticallyRegisteredPoint.class)
             .findFirst()
             .orElseThrow();
 
@@ -106,7 +106,7 @@ class MarshallingTests {
         schemaFactory.register(Point.class);
 
         final var marshallingSchema = schemaFactory
-            .getMashallingSchema(Point.class)
+            .getMarshallingSchema(Point.class)
             .orElseThrow();
 
         assertThat(marshallingSchema)
@@ -128,10 +128,10 @@ class MarshallingTests {
             .map(Parameter::type))
             .allMatch(Integer.class::equals);
 
-        assertThat(schemaFactory.getUnmashallingSchemas(Point.class))
+        assertThat(schemaFactory.getUnmarshallingSchemas(Point.class))
             .hasSize(1);
 
-        final var unmashallingSchema = schemaFactory.getUnmashallingSchemas(Point.class)
+        final var unmashallingSchema = schemaFactory.getUnmarshallingSchemas(Point.class)
             .findFirst()
             .orElseThrow();
 
@@ -160,7 +160,7 @@ class MarshallingTests {
     @Test
     void shouldNotObtainSchemaForUnmarshallableClass() {
         assertThat(Marshalling.globalSchemaFactory()
-            .getMashallingSchema(String.class))
+            .getMarshallingSchema(String.class))
             .isEmpty();
     }
 

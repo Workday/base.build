@@ -54,7 +54,7 @@ public interface Progress
      *
      * @return the percentage complete
      */
-    int percentage();
+    double percentage();
 
     /**
      * Obtains the {@link NamedUnit} of measure for this {@link Progress}.
@@ -114,8 +114,8 @@ public interface Progress
             }
 
             @Override
-            public int percentage() {
-                return (int) ((double) current() / maximum() * 100.0);
+            public double percentage() {
+                return maximum() == 0 ? 0.0 : (double) current() / maximum() * 100.0;
             }
 
             @Override

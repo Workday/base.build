@@ -59,7 +59,7 @@ public interface TextualRange
                                final TextualPosition end) {
 
         Objects.requireNonNull(start, "The start TextualPosition must not be null");
-        Objects.requireNonNull(start, "The end TextualPosition must not be null");
+        Objects.requireNonNull(end, "The end TextualPosition must not be null");
 
         return new TextualRange() {
 

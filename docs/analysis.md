@@ -196,18 +196,19 @@ No file, environment variable, or system property sourcing beyond individual `@D
 
 ## Latent Issues to Fix
 
-| Issue | Module | Severity | Notes |
-|---|---|---|---|
-| `RetryFrequency.within()` inverted guards | base-retryable | **Bug** | Method is broken — valid inputs are rejected |
-| `Connection` uses Java serialization | base-network | **Security** | Remote code execution surface via gadget chains |
-| `Connection` uses `synchronized` with Virtual Threads | base-network | **Performance** | Pins carrier thread on JDK <24 |
-| `getMashallingSchema` typo in public API | base-marshalling | API quality | Missing 'r' in "Marshalling" — part of the `SchemaFactory` interface |
-| `Progress.percentage()` uses integer division | base-telemetry | Precision loss | `current=1, maximum=3` → `33%` not `33.3%` |
-| `TextualRange` null-checks `start` twice, never checks `end` | base-telemetry | **Bug** | Constructor parameter validation is wrong |
-| `@Unmarshal` on methods silently ignored | base-marshalling | Surprising behavior | Only constructors are scanned despite annotation targeting both |
-| `Table.getRow(int)` off-by-one in bounds check | base-table | **Bug** | `index > rows.size()` should be `>= rows.size()` |
-| `Marshalling.GLOBAL_SCHEMA_FACTORY` is a static mutable singleton | base-marshalling | Test isolation | Cannot be overridden via `Configuration`; shared across all tests |
-| `RetryFrequency.never()` calls `maxRetriesOf(0)` which throws on `limit <= 0` | base-retryable | **Bug** | Self-contradictory construction — likely unreachable |
+| Issue | Module | Severity | Status | Notes |
+|---|---|---|---|---|
+| ~~`RetryFrequency.within()` inverted guards~~ | ~~base-retryable~~ | ~~**Bug**~~ | ✅ Fixed | ~~Method is broken — valid inputs are rejected~~ |
+| ~~`RetryFrequency.never()` calls `maxRetriesOf(0)` which throws on `limit <= 0`~~ | ~~base-retryable~~ | ~~**Bug**~~ | ✅ Fixed | ~~Self-contradictory construction — likely unreachable~~ |
+| ~~`TextualRange` null-checks `start` twice, never checks `end`~~ | ~~base-telemetry~~ | ~~**Bug**~~ | ✅ Fixed | ~~Constructor parameter validation is wrong~~ |
+| ~~`Table.getRow(int)` off-by-one in bounds check~~ | ~~base-table~~ | ~~**Bug**~~ | ✅ Fixed | ~~`index > rows.size()` should be `>= rows.size()`~~ |
+| ~~`getMarshallingSchema` typo in public API~~ | ~~base-marshalling~~ | ~~API quality~~ | ✅ Fixed | ~~Missing 'r' in "Marshalling" — part of the `SchemaFactory` interface~~ |
+| ~~`@Unmarshal` on methods silently ignored~~ | ~~base-marshalling~~ | ~~Surprising behavior~~ | ✅ Fixed | ~~Only constructors are scanned despite annotation targeting both~~ |
+| ~~`Progress.percentage()` uses integer division~~ | ~~base-telemetry~~ | ~~Precision loss~~ | ✅ Fixed | ~~`current=1, maximum=3` → `33%` not `33.3%`; return type changed to `double`~~ |
+| `Marshalling.GLOBAL_SCHEMA_FACTORY` is a static mutable singleton | base-marshalling | Test isolation | 🔲 Open | Cannot be overridden via `Configuration`; shared across all tests |
+| `Connection` uses Java serialization | base-network | **Security** | ⏭ Deferred | Remote code execution surface via gadget chains |
+| `Connection` uses `synchronized` with Virtual Threads | base-network | **Performance** | ⏭ Deferred | Pins carrier thread on JDK <24 |
+| Multiple correctness and threading bugs in telemetry modules | base-telemetry, base-telemetry-foundation, base-telemetry-ansi | **Bug** | 🔲 Open | See [docs/telemetry-bugs.md](telemetry-bugs.md) |
 
 ---
 
@@ -231,22 +232,25 @@ None of these have a corresponding `<dependency>` entry in the root `<dependency
 
 Ordered by impact-to-effort ratio:
 
-| Priority | Item | Category | Rationale |
-|---|---|---|---|
-| 1 | Fix `RetryFrequency.within()` and `.never()` bugs | Bug fix | Low effort, high trust — correctness fix for a key abstraction |
-| 2 | Fix `TextualRange` null-check and `Table.getRow` off-by-one | Bug fix | One-line fixes each |
-| 3 | Bridge `Exceptional` and `Retryable` | Enhancement | Removes the biggest architectural seam in the library |
-| 4 | Add Publisher operators to `base-flow` | Enhancement | Small surface area, big usability improvement |
-| 5 | Integrate `TelemetryRecorder` with `BlockingRetry` | Enhancement | Makes retry observable — critical for operations |
-| 6 | `base-validation` module | New module | Fills the most commonly felt gap for downstream consumers |
-| 7 | Fix `Connection` (`Marshalling` + `ReentrantLock`) | Security + correctness | Eliminates RCE surface and thread pinning |
-| 8 | `base-transport-binary` module | New module | Enables the Connection fix and adds a performance transport option |
-| 9 | `base-scheduling` / `AsyncRetry` | New module | Completes the concurrency story beyond blocking retry |
-| 10 | `base-cache` module | New module | Natural extension of `Memoizer` with TTL, eviction, statistics |
-| 11 | Configuration sourcing (file/env/sysprop loader) | Enhancement | Enables external config files without custom code |
-| 12 | Typed exception recovery on `Exceptional` | Enhancement | Quality-of-life for monadic error handling |
-| 13 | Structured data for `TelemetryRecorder` | Enhancement | Enables machine-processable telemetry |
-| 14 | Change notifications on `Index` | Enhancement | Enables reactive index-driven workflows |
-| 15 | `base-inject` module | New module | Consolidates DI patterns already scattered across modules |
-| 16 | `base-process` module | New module | Subprocess management integrated with existing I/O infrastructure |
-| 17 | `base-template` module | New module | Completes the string-processing story alongside EL expressions |
+| Priority | Item | Category | Status | Rationale |
+|---|---|---|---|---|
+| 1 | ~~Fix `RetryFrequency.within()` and `.never()` bugs~~ | ~~Bug fix~~ | ✅ Fixed | ~~Low effort, high trust — correctness fix for a key abstraction~~ |
+| 2 | ~~Fix `TextualRange` null-check and `Table.getRow` off-by-one~~ | ~~Bug fix~~ | ✅ Fixed | ~~One-line fixes each~~ |
+| 2 | ~~Fix `getMarshallingSchema` typo, `@Unmarshal` target, `Progress.percentage()` type~~ | ~~Bug fix~~ | ✅ Fixed | ~~Public API quality and precision fix~~ |
+| 3 | Fix telemetry bugs (see [docs/telemetry-bugs.md](telemetry-bugs.md)) | Bug fix | 🔲 Open | 20 correctness, threading, and rendering bugs across all three telemetry modules |
+| 4 | Fix `Marshalling.GLOBAL_SCHEMA_FACTORY` singleton | Bug fix | 🔲 Open | Breaks test isolation |
+| 5 | Bridge `Exceptional` and `Retryable` | Enhancement | 🔲 Open | Removes the biggest architectural seam in the library |
+| 6 | Add Publisher operators to `base-flow` | Enhancement | 🔲 Open | Small surface area, big usability improvement |
+| 7 | Integrate `TelemetryRecorder` with `BlockingRetry` | Enhancement | 🔲 Open | Makes retry observable — critical for operations |
+| 8 | `base-validation` module | New module | 🔲 Open | Fills the most commonly felt gap for downstream consumers |
+| 9 | Fix `Connection` (`Marshalling` + `ReentrantLock`) | Security + correctness | ⏭ Deferred | Eliminates RCE surface and thread pinning |
+| 10 | `base-transport-binary` module | New module | 🔲 Open | Enables the Connection fix and adds a performance transport option |
+| 11 | `base-scheduling` / `AsyncRetry` | New module | 🔲 Open | Completes the concurrency story beyond blocking retry |
+| 12 | `base-cache` module | New module | 🔲 Open | Natural extension of `Memoizer` with TTL, eviction, statistics |
+| 13 | Configuration sourcing (file/env/sysprop loader) | Enhancement | 🔲 Open | Enables external config files without custom code |
+| 14 | Typed exception recovery on `Exceptional` | Enhancement | 🔲 Open | Quality-of-life for monadic error handling |
+| 15 | Structured data for `TelemetryRecorder` | Enhancement | 🔲 Open | Enables machine-processable telemetry |
+| 16 | Change notifications on `Index` | Enhancement | 🔲 Open | Enables reactive index-driven workflows |
+| 17 | `base-inject` module | New module | 🔲 Open | Consolidates DI patterns already scattered across modules |
+| 18 | `base-process` module | New module | 🔲 Open | Subprocess management integrated with existing I/O infrastructure |
+| 19 | `base-template` module | New module | 🔲 Open | Completes the string-processing story alongside EL expressions |
