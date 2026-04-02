@@ -3,12 +3,12 @@ package build.base.expression;
 import build.base.configuration.AbstractValueOption;
 import build.base.configuration.ValueOption;
 import jakarta.el.ELException;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests that {@link Processor}s evaluate and replace expressions.

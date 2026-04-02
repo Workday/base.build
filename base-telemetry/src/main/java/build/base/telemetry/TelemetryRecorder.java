@@ -187,7 +187,7 @@ public interface TelemetryRecorder {
      * @param args     the arguments
      * @return the created {@link Warning} {@link Telemetry}
      */
-    default Warning warn(Stream<? extends Location> location, String format, Object... args) {
+    default Warning warn(final Stream<? extends Location> location, final String format, final Object... args) {
         return warn(location, null, format, args);
     }
 
@@ -262,7 +262,7 @@ public interface TelemetryRecorder {
      * @param args      the arguments
      * @return the created {@link Error} {@link Telemetry}
      */
-    default Error error(Stream<? extends Location> locations, String format, Object... args) {
+    default Error error(final Stream<? extends Location> locations, final String format, final Object... args) {
         return error(locations, null, format, args);
     }
 

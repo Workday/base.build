@@ -22,13 +22,10 @@ package build.base.assertion;
 
 import build.base.foundation.Capture;
 import build.base.option.Timeout;
-import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.assertj.core.error.ShouldNotHaveThrown.shouldNotHaveThrown;
-import static org.assertj.core.error.future.ShouldBeCancelled.shouldBeCancelled;
-import static org.assertj.core.error.future.ShouldBeCompleted.shouldBeCompleted;
-import static org.assertj.core.error.future.ShouldBeCompletedExceptionally.shouldHaveCompletedExceptionally;
-import static org.assertj.core.error.future.ShouldNotBeCancelled.shouldNotBeCancelled;
-import static org.assertj.core.error.future.ShouldNotBeCompleted.shouldNotBeCompleted;
+import org.assertj.core.api.AbstractAssert;
+import org.assertj.core.api.AbstractThrowableAssert;
+import org.assertj.core.api.Assertions;
+import org.assertj.core.api.ObjectAssert;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -38,10 +35,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import org.assertj.core.api.AbstractAssert;
-import org.assertj.core.api.AbstractThrowableAssert;
-import org.assertj.core.api.Assertions;
-import org.assertj.core.api.ObjectAssert;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.error.ShouldNotHaveThrown.shouldNotHaveThrown;
+import static org.assertj.core.error.future.ShouldBeCancelled.shouldBeCancelled;
+import static org.assertj.core.error.future.ShouldBeCompleted.shouldBeCompleted;
+import static org.assertj.core.error.future.ShouldBeCompletedExceptionally.shouldHaveCompletedExceptionally;
+import static org.assertj.core.error.future.ShouldNotBeCancelled.shouldNotBeCancelled;
+import static org.assertj.core.error.future.ShouldNotBeCompleted.shouldNotBeCompleted;
 
 /**
  * An {@code assertj} Assertion Class for {@link CompletableFuture}s.

@@ -3,15 +3,15 @@ package build.base.network;
 import build.base.assertion.Eventually;
 import build.base.foundation.Closeables;
 import build.base.io.SerializableCallable;
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.net.URI;
 import java.util.concurrent.CompletableFuture;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for the {@link Client} and {@link Server}.

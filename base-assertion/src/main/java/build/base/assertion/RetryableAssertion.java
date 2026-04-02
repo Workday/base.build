@@ -28,12 +28,11 @@ import build.base.retryable.BlockingRetry;
 import build.base.retryable.PermanentFailureException;
 import build.base.retryable.Retryable;
 import build.base.retryable.RetryablePredicate;
-
-import java.util.Objects;
-
 import org.assertj.core.api.AbstractThrowableAssert;
 import org.assertj.core.api.Assertions;
 import org.assertj.core.api.ObjectAssert;
+
+import java.util.Objects;
 
 /**
  * An {@code assertj}-like Assertion Class for {@link Retryable}s.

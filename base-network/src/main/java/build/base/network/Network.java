@@ -22,12 +22,12 @@ package build.base.network;
 
 import build.base.configuration.Configuration;
 import build.base.configuration.Option;
-import build.base.option.Timeout;
 import build.base.foundation.Strings;
 import build.base.foundation.predicate.Predicates;
 import build.base.network.option.KeepAlive;
 import build.base.network.option.SocketTimeout;
 import build.base.network.option.TCPNoDelay;
+import build.base.option.Timeout;
 import build.base.retryable.BlockingRetry;
 import build.base.retryable.EphemeralFailureException;
 import build.base.retryable.Retryable;

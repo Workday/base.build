@@ -22,11 +22,10 @@ package build.base.transport.json;
 
 import build.base.marshalling.Marshaller;
 import build.base.marshalling.Parameter;
-
-import java.io.IOException;
-
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
+
+import java.io.IOException;
 
 /**
  * A JSON <a href="https://en.wikipedia.org/wiki/Codec">Codec</a> for a specific type of value.

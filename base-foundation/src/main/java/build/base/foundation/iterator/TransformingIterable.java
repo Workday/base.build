@@ -45,7 +45,7 @@ public interface TransformingIterable<T>
      * @param <R>      the type of elements returned by the {@link Iterator}
      * @return a {@link TransformingIterable}
      */
-    default <R> TransformingIterable<R> map(Function<T, R> function) {
+    default <R> TransformingIterable<R> map(final Function<T, R> function) {
         return of(() -> Iterators.map(iterator(), function));
     }
 
@@ -56,7 +56,7 @@ public interface TransformingIterable<T>
      * @param predicate the {@link Predicate}
      * @return a {@link TransformingIterable}
      */
-    default TransformingIterable<T> filter(Predicate<? super T> predicate) {
+    default TransformingIterable<T> filter(final Predicate<? super T> predicate) {
         return of(() -> Iterators.filter(iterator(), predicate));
     }
 
@@ -94,7 +94,7 @@ public interface TransformingIterable<T>
      * @param value     the value to be used in an equality check with the extractor
      * @return a {@link TransformingIterable}
      */
-    default <R> TransformingIterable<T> filter(final Function<T, R> extractor, R value) {
+    default <R> TransformingIterable<T> filter(final Function<T, R> extractor, final R value) {
         return filter(t -> Objects.equals(extractor.apply(t), value));
     }
 

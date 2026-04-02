@@ -3,9 +3,10 @@ package build.base.foundation;
 import build.base.foundation.example.AbstractPerson;
 import build.base.foundation.example.ConcretePerson;
 import build.base.foundation.tuple.Tuple;
-import static build.base.foundation.Introspection.getParameterType;
-import static build.base.foundation.Introspection.parameterTypes;
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.annotation.Annotation;
 import java.lang.annotation.ElementType;
@@ -23,10 +24,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import static build.base.foundation.Introspection.getParameterType;
+import static build.base.foundation.Introspection.parameterTypes;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for {@link Introspection}.

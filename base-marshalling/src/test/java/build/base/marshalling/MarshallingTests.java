@@ -9,9 +9,9 @@ import build.base.marshalling.example.PointWithMarshaller;
 import build.base.marshalling.example.StaticallyRegisteredPoint;
 import build.base.marshalling.example.Wrapper;
 import build.base.marshalling.tutorial.Address;
-import static org.assertj.core.api.Assertions.assertThat;
-
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for {@link Marshalling}.

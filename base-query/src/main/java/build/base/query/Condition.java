@@ -64,7 +64,7 @@ public interface Condition<Q, V> {
      * @param predicate the {@link Predicate} that must fail to match
      * @return a {@link Terminal} that can be used to obtain the results
      */
-    default Terminal<Q, ?> doesNotMatch(Predicate<? super V> predicate) {
+    default Terminal<Q, ?> doesNotMatch(final Predicate<? super V> predicate) {
         return matches(predicate.negate());
     }
 }

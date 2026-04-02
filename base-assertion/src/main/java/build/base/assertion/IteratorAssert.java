@@ -22,6 +22,7 @@ package build.base.assertion;
 
 import build.base.foundation.iterator.matching.IteratorPatternMatcher;
 import build.base.foundation.iterator.matching.IteratorPatternMatchers;
+import org.assertj.core.api.Assertions;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -29,8 +30,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import org.assertj.core.api.Assertions;
 
 /**
  * An {@code assertj}-like Assertion Class for {@link IteratorPatternMatcher}s evaluated against

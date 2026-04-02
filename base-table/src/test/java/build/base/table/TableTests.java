@@ -3,9 +3,9 @@ package build.base.table;
 import build.base.foundation.Strings;
 import build.base.table.option.CellSeparator;
 import build.base.table.option.RowComparator;
-import static org.assertj.core.api.Assertions.assertThat;
-
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for {@link Table}.

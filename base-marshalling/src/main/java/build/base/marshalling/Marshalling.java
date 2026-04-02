@@ -48,7 +48,7 @@ public interface Marshalling {
      * @param lookup            the {@link MethodHandles.Lookup} for the {@link Class}
      * @param <T>               the type of <i>marshallable</i> {@link Class}
      */
-    static <T> void register(Class<T> registrationClass, MethodHandles.Lookup lookup) {
+    static <T> void register(final Class<T> registrationClass, final MethodHandles.Lookup lookup) {
         GLOBAL_SCHEMA_FACTORY.register(registrationClass, lookup);
     }
 
@@ -61,7 +61,7 @@ public interface Marshalling {
      * @param marshallableClass the <i>marshallable</i> {@link Class} to register
      * @param <T>               the type of <i>marshallable</i> {@link Class}
      */
-    static <T> void register(Class<T> marshallableClass) {
+    static <T> void register(final Class<T> marshallableClass) {
         GLOBAL_SCHEMA_FACTORY.register(marshallableClass);
     }
 

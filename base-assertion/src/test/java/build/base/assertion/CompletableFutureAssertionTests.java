@@ -1,8 +1,8 @@
 package build.base.assertion;
 
-import java.util.concurrent.CompletableFuture;
-
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Tests for {@link CompletableFutureAssertionTests}.

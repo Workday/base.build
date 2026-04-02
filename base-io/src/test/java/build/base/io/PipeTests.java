@@ -3,7 +3,7 @@ package build.base.io;
 import build.base.assertion.Eventually;
 import build.base.assertion.IteratorAssert;
 import build.base.flow.RecordingSubscriber;
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -12,7 +12,7 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.Writer;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for {@link Pipe}s

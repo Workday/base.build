@@ -1,15 +1,15 @@
 package build.base.foundation.iterator.matching;
 
 import build.base.foundation.Capture;
-import static build.base.foundation.predicate.Predicates.descriptive;
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.Test;
+import static build.base.foundation.predicate.Predicates.descriptive;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for {@link IteratorPatternMatcher}s.

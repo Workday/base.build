@@ -6,6 +6,7 @@ import build.base.network.option.SocketTimeout;
 import build.base.option.Timeout;
 import build.base.retryable.PermanentFailureException;
 import build.base.retryable.option.RetryFrequency;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -14,8 +15,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-
-import org.junit.jupiter.api.Test;
 
 /**
  * Tests for {@link Network} utilities.

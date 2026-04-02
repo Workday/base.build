@@ -3,13 +3,13 @@ package build.base.commandline;
 import build.base.configuration.AbstractValueOption;
 import build.base.configuration.Configuration;
 import build.base.configuration.Option;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.Test;
 
 import java.util.Objects;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests for the {@link CommandLineParser} and the {@link CommandLine} interface/annotations.

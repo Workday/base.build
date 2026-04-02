@@ -1,6 +1,6 @@
 package build.base.network;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.DatagramSocket;
@@ -9,7 +9,7 @@ import java.net.ServerSocket;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for the {@link EphemeralPortSupplier}.
