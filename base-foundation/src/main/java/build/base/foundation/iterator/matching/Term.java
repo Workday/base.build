@@ -21,13 +21,14 @@ package build.base.foundation.iterator.matching;
  */
 
 import build.base.foundation.predicate.Predicates;
-import static build.base.foundation.predicate.Predicates.descriptive;
 
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
+
+import static build.base.foundation.predicate.Predicates.descriptive;
 
 /**
  * Represents a {@link Condition} for evaluating zero or more values provided by {@link Iterator}, and/or the

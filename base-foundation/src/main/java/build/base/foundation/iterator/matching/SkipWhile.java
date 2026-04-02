@@ -21,10 +21,11 @@ package build.base.foundation.iterator.matching;
  */
 
 import build.base.foundation.iterator.ResettableIterator;
-import static build.base.foundation.predicate.Predicates.always;
 
 import java.util.Iterator;
 import java.util.function.Predicate;
+
+import static build.base.foundation.predicate.Predicates.always;
 
 /**
  * A {@link Matcher} to skip over an number of elements in an {@link Iterator} while a

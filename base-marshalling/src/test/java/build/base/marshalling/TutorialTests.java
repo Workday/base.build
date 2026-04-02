@@ -17,12 +17,12 @@ import build.base.marshalling.tutorial.PersonWithValidatedAddress;
 import build.base.marshalling.tutorial.ResidentialAddress;
 import build.base.marshalling.tutorial.SelfRegisteredPerson;
 import build.base.marshalling.tutorial.ValidatedAddress;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Marshalling tests for the tutorial examples.

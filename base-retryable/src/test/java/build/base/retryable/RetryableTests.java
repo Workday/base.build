@@ -1,10 +1,10 @@
 package build.base.retryable;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 import java.util.function.Supplier;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for {@link Retryable}s.

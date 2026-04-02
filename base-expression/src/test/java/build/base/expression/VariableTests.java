@@ -1,8 +1,8 @@
 package build.base.expression;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests that {@link Variable}s are created properly and that their properties can be accessed.

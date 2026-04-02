@@ -5,9 +5,7 @@ import build.base.retryable.EphemerallyFailingRetryable;
 import build.base.retryable.PermanentFailureException;
 import build.base.retryable.PermanentlyFailingRetryable;
 import build.base.retryable.Retryable;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Fail.fail;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -15,7 +13,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Fail.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests for {@link Eventually}.

@@ -22,7 +22,6 @@ package build.base.foundation.iterator.matching;
 
 import build.base.foundation.Capture;
 import build.base.foundation.iterator.ResettableIterator;
-import static build.base.foundation.predicate.Predicates.always;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -30,6 +29,8 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+
+import static build.base.foundation.predicate.Predicates.always;
 
 /**
  * A {@link Matcher} to evaluate an element using a {@link Predicate}.

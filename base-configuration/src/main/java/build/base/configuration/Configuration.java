@@ -20,13 +20,13 @@ package build.base.configuration;
  * #L%
  */
 
-import static build.base.configuration.Option.getDefaultOption;
-
 import java.lang.reflect.Array;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
+
+import static build.base.configuration.Option.getDefaultOption;
 
 /**
  * An <strong>immutable</strong> {@link java.util.Map}-like structure for managing zero or more configuration
@@ -247,7 +247,7 @@ public interface Configuration {
      * @return a {@link Stream} of {@link Option}s implementing the specified type
      */
     @SuppressWarnings("unchecked")
-    default <I> Stream<I> stream(Class<I> requiredClass) {
+    default <I> Stream<I> stream(final Class<I> requiredClass) {
 
         return stream()
             .filter(requiredClass::isInstance)

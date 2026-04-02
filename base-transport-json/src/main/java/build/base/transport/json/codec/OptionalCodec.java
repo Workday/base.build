@@ -25,13 +25,12 @@ import build.base.marshalling.Marshaller;
 import build.base.marshalling.Parameter;
 import build.base.transport.json.ConditionalCodec;
 import build.base.transport.json.JsonTransport;
-
-import java.io.IOException;
-import java.util.Optional;
-
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
+
+import java.io.IOException;
+import java.util.Optional;
 
 /**
  * A {@link ConditionalCodec} of {@link Optional} values.

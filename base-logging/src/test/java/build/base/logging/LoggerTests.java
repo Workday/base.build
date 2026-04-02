@@ -2,12 +2,12 @@ package build.base.logging;
 
 import build.base.flow.LogRecordPublisher;
 import build.base.flow.RecordingSubscriber;
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for {@link Logger}s.

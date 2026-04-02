@@ -19,9 +19,8 @@ import build.base.transport.json.example.PersonWithOptionalLastName;
 import build.base.transport.json.example.StreamsAndOptionals;
 import build.base.transport.json.example.TemporalPerson;
 import build.base.transport.json.example.Uber;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.fasterxml.jackson.core.JsonFactory;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -32,9 +31,9 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.Test;
-
-import com.fasterxml.jackson.core.JsonFactory;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for {@link JsonTransport}.

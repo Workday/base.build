@@ -20,7 +20,6 @@ package build.base.marshalling.tutorial;
  * #L%
  */
 
-import build.base.foundation.Capture;
 import build.base.marshalling.Marshal;
 import build.base.marshalling.Marshalling;
 import build.base.marshalling.Out;

@@ -1,10 +1,10 @@
 package build.base.parsing;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 import java.util.regex.Pattern;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for {@link Scanner}.

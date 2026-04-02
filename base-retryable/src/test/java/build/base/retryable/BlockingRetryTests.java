@@ -4,6 +4,12 @@ import build.base.option.Timeout;
 import build.base.retryable.option.MaximumDelay;
 import build.base.retryable.option.MinimumDelay;
 import build.base.retryable.option.RetryFrequency;
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Stack;
+
 import static build.base.retryable.ConditionallyRetryable.retrying;
 import static java.time.Duration.ofMillis;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,12 +21,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Stack;
-
-import org.junit.jupiter.api.Test;
 
 /**
  * Tests for {@link BlockingRetry}.

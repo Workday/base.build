@@ -1,12 +1,12 @@
 package build.base.foundation;
 
 import build.base.foundation.stream.Streams;
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashSet;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests to sort by {@link Requires}.

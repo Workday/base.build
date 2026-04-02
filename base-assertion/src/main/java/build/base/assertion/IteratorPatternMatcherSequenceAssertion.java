@@ -21,10 +21,9 @@ package build.base.assertion;
  */
 
 import build.base.foundation.iterator.matching.Sequence;
+import org.assertj.core.api.Assertions;
 
 import java.util.Objects;
-
-import org.assertj.core.api.Assertions;
 
 /**
  * An {@code assertj}-like assertion step wrapping a {@link Sequence}, allowing the fluent

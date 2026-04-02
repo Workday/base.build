@@ -1,14 +1,14 @@
 package build.base.foundation;
 
 import build.base.foundation.predicate.Predicates;
+import org.junit.jupiter.api.Test;
+
 import static build.base.foundation.predicate.Predicates.allOf;
 import static build.base.foundation.predicate.Predicates.always;
 import static build.base.foundation.predicate.Predicates.anyOf;
 import static build.base.foundation.predicate.Predicates.never;
 import static build.base.foundation.predicate.Predicates.not;
 import static org.assertj.core.api.Assertions.assertThat;
-
-import org.junit.jupiter.api.Test;
 
 /**
  * Tests for {@link Predicates}.

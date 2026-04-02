@@ -1,9 +1,9 @@
 package build.base.flow;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for {@link MappingSubscriber}s.

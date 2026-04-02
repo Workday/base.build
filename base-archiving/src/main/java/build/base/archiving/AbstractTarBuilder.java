@@ -21,6 +21,9 @@ package build.base.archiving;
  */
 
 import build.base.foundation.Closeables;
+import org.kamranzafar.jtar.TarEntry;
+import org.kamranzafar.jtar.TarHeader;
+import org.kamranzafar.jtar.TarOutputStream;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -28,10 +31,6 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
-
-import org.kamranzafar.jtar.TarEntry;
-import org.kamranzafar.jtar.TarHeader;
-import org.kamranzafar.jtar.TarOutputStream;
 
 /**
  * An abstract {@link ArchiveBuilder} of Tape Archives (.tar files).

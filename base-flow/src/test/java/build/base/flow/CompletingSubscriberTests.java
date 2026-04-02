@@ -1,12 +1,12 @@
 package build.base.flow;
 
 import build.base.foundation.predicate.Predicates;
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests for {@link CompletingSubscriber}s.

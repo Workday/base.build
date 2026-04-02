@@ -1,12 +1,12 @@
 package build.base.retryable;
 
-import static build.base.retryable.ConditionallyRetryable.retrying;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.Test;
 
 import java.util.function.Supplier;
 
-import org.junit.jupiter.api.Test;
+import static build.base.retryable.ConditionallyRetryable.retrying;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests for {@link ConditionallyRetryable}.
