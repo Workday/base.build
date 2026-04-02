@@ -99,7 +99,9 @@ public class ObservableTelemetryRecorder
      * @return the {@link Stream} of observed {@link Telemetry}
      */
     public Stream<Telemetry> stream() {
-        return telemetry.stream();
+        synchronized (this.telemetry) {
+            return new java.util.ArrayList<>(this.telemetry).stream();
+        }
     }
 
     /**
@@ -110,7 +112,9 @@ public class ObservableTelemetryRecorder
      * {@code false} otherwise
      */
     public boolean hasObserved(final Predicate<? super Telemetry> predicate) {
-        return predicate != null && this.telemetry.stream().anyMatch(predicate);
+        synchronized (this.telemetry) {
+            return predicate != null && this.telemetry.stream().anyMatch(predicate);
+        }
     }
 
     /**
@@ -126,7 +130,7 @@ public class ObservableTelemetryRecorder
 
     @Override
     public URI uri() {
-        return this.telemetryRecorder.uri();
+        return this.uri;
     }
 
     @Override

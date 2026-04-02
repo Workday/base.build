@@ -74,7 +74,7 @@ public interface Completed<T>
         Objects.requireNonNull(uri, "The source uri must not be null");
 
         final Instant instant = Instant.now();
-        final String message = String.format(format, args);
+        final String message = format == null ? "" : String.format(format, args);
         final Optional<T> optional = Optional.ofNullable(result);
         final Duration duration = Duration.between(commenced, instant);
         final ArrayList<Location> locationList = locations.collect(Collectors.toCollection(ArrayList::new));
@@ -118,9 +118,9 @@ public interface Completed<T>
             @Override
             public String toString() {
                 final long days = duration.toDays();
-                final long hours = duration.toHours() - (days * 24);
-                final long minutes = duration.toMinutes() - (hours * 60);
-                final long seconds = (duration.toMillis() / 1000) - (minutes * 60);
+                final long hours = duration.toHours() % 24;
+                final long minutes = duration.toMinutes() % 60;
+                final long seconds = duration.getSeconds() % 60;
                 final long millis = duration.toMillis() % 1000;
 
                 final String duration = (days > 0 ? days + " days " : "")

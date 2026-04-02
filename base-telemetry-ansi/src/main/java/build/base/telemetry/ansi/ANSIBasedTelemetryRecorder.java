@@ -77,7 +77,7 @@ public class ANSIBasedTelemetryRecorder
 
                     render();
                 } catch (final InterruptedException e) {
-                    // ignore interrupts
+                    Thread.currentThread().interrupt();
                 }
             }
         });
@@ -146,16 +146,36 @@ public class ANSIBasedTelemetryRecorder
             }
         }
 
-        render();
-
-        // clear the list when it only contains null Activities
+        // clear the list before rendering when it only contains null Activities
         if (this.activities.stream().allMatch(Objects::isNull)) {
             this.activities.clear();
         }
+
+        render();
     }
 
     /**
      * Renders the current {@link Activity}s to the terminal.
+     *
+     * <p>Each render cycle prints all N progress bars and then repositions the cursor back to
+     * the top of the bar region so the next cycle overwrites them in place. The cursor arithmetic
+     * is as follows (let L = the line where the first bar should appear):
+     *
+     * <ol>
+     *   <li>{@code println(bar)} × N — prints N bars; cursor moves from L to L+N.</li>
+     *   <li>{@code print("\u001b[" + (N+1) + "A")} — moves cursor UP (N+1) lines;
+     *       cursor lands at L−1 (one line <em>above</em> the bar region).</li>
+     *   <li>{@code println("\f")} — emits a form-feed followed by a newline ({@code \f\n});
+     *       the two characters together advance the cursor by two lines, landing at L+1.</li>
+     *   <li>{@code print("\u001b[1A")} — moves cursor UP 1 line; cursor lands at L.</li>
+     * </ol>
+     *
+     * <p>Net displacement: 0. The cursor is back at L, ready to overwrite the bars on the next
+     * render. The {@code N+1} in step 2 is intentional and load-bearing: it overshoots by one
+     * so that the {@code \f\n} in step 3 (which always contributes {@code +2}) is exactly
+     * cancelled by the final {@code −1} from step 4. Changing {@code N+1} to {@code N} would
+     * shift the bar region down by one line on every render cycle, causing the output to scroll
+     * rather than update in place.
      */
     synchronized void render() {
 
@@ -172,14 +192,16 @@ public class ANSIBasedTelemetryRecorder
                 }
             }
 
-            // move the cursor above the progress bars
+            // Step 2: move the cursor N+1 lines up (to L-1, one line above the bar region).
+            // The +1 overshoot is required — see the Javadoc above for the full explanation.
             System.out.print("\u001b[" + (this.activities.size() + 1) + "A");
             System.out.flush();
 
-            // scroll the normal text up (by outputting a form feed)
+            // Step 3: emit \f\n (+2 lines) to scroll normal text up and land at L+1.
             System.out.println("\f");
             System.out.flush();
 
+            // Step 4: move up 1 line to arrive back at L (top of bar region).
             System.out.print("\u001b[1A");
             System.out.flush();
         }

@@ -53,7 +53,7 @@ public interface Diagnostic
         Objects.requireNonNull(uri, "The source uri must not be null");
 
         final Instant instant = Instant.now();
-        final String message = String.format(format, args);
+        final String message = format == null ? "" : String.format(format, args);
         final ArrayList<Location> locationList = locations.collect(Collectors.toCollection(ArrayList::new));
 
         return new Diagnostic() {
