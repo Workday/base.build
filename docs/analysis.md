@@ -196,19 +196,19 @@ No file, environment variable, or system property sourcing beyond individual `@D
 
 ## Latent Issues to Fix
 
-| Issue | Module | Severity | Status | Notes |
-|---|---|---|---|---|
-| ~~`RetryFrequency.within()` inverted guards~~ | ~~base-retryable~~ | ~~**Bug**~~ | ✅ Fixed | ~~Method is broken — valid inputs are rejected~~ |
-| ~~`RetryFrequency.never()` calls `maxRetriesOf(0)` which throws on `limit <= 0`~~ | ~~base-retryable~~ | ~~**Bug**~~ | ✅ Fixed | ~~Self-contradictory construction — likely unreachable~~ |
-| ~~`TextualRange` null-checks `start` twice, never checks `end`~~ | ~~base-telemetry~~ | ~~**Bug**~~ | ✅ Fixed | ~~Constructor parameter validation is wrong~~ |
-| ~~`Table.getRow(int)` off-by-one in bounds check~~ | ~~base-table~~ | ~~**Bug**~~ | ✅ Fixed | ~~`index > rows.size()` should be `>= rows.size()`~~ |
-| ~~`getMarshallingSchema` typo in public API~~ | ~~base-marshalling~~ | ~~API quality~~ | ✅ Fixed | ~~Missing 'r' in "Marshalling" — part of the `SchemaFactory` interface~~ |
-| ~~`@Unmarshal` on methods silently ignored~~ | ~~base-marshalling~~ | ~~Surprising behavior~~ | ✅ Fixed | ~~Only constructors are scanned despite annotation targeting both~~ |
-| ~~`Progress.percentage()` uses integer division~~ | ~~base-telemetry~~ | ~~Precision loss~~ | ✅ Fixed | ~~`current=1, maximum=3` → `33%` not `33.3%`; return type changed to `double`~~ |
-| `Marshalling.GLOBAL_SCHEMA_FACTORY` is a static mutable singleton | base-marshalling | Test isolation | 🔲 Open | Cannot be overridden via `Configuration`; shared across all tests |
-| `Connection` uses Java serialization | base-network | **Security** | ⏭ Deferred | Remote code execution surface via gadget chains |
-| `Connection` uses `synchronized` with Virtual Threads | base-network | **Performance** | ⏭ Deferred | Pins carrier thread on JDK <24 |
-| Multiple correctness and threading bugs in telemetry modules | base-telemetry, base-telemetry-foundation, base-telemetry-ansi | **Bug** | 🔲 Open | See [docs/telemetry-bugs.md](telemetry-bugs.md) |
+| Issue                                                                             | Module                                                             | Severity                | Status | Notes |
+|-----------------------------------------------------------------------------------|--------------------------------------------------------------------|-------------------------|---|---|
+| ~~`RetryFrequency.within()` inverted guards~~                                     | ~~base-retryable~~                                                 | ~~**Bug**~~             | ✅ Fixed | ~~Method is broken — valid inputs are rejected~~ |
+| ~~`RetryFrequency.never()` calls `maxRetriesOf(0)` which throws on `limit <= 0`~~ | ~~base-retryable~~                                                 | ~~**Bug**~~             | ✅ Fixed | ~~Self-contradictory construction — likely unreachable~~ |
+| ~~`TextualRange` null-checks `start` twice, never checks `end`~~                  | ~~base-telemetry~~                                                 | ~~**Bug**~~             | ✅ Fixed | ~~Constructor parameter validation is wrong~~ |
+| ~~`Table.getRow(int)` off-by-one in bounds check~~                                | ~~base-table~~                                                     | ~~**Bug**~~             | ✅ Fixed | ~~`index > rows.size()` should be `>= rows.size()`~~ |
+| ~~`getMarshallingSchema` typo in public API~~                                     | ~~base-marshalling~~                                               | ~~API quality~~         | ✅ Fixed | ~~Missing 'r' in "Marshalling" — part of the `SchemaFactory` interface~~ |
+| ~~`@Unmarshal` on methods silently ignored~~                                      | ~~base-marshalling~~                                               | ~~Surprising behavior~~ | ✅ Fixed | ~~Only constructors are scanned despite annotation targeting both~~ |
+| ~~`Progress.percentage()` uses integer division~~                                 | ~~base-telemetry~~                                                 | ~~Precision loss~~      | ✅ Fixed | ~~`current=1, maximum=3` → `33%` not `33.3%`; return type changed to `double`~~ |
+| `Marshalling.GLOBAL_SCHEMA_FACTORY` is a static mutable singleton                 | base-marshalling                                                   | Test isolation          | 🔲 Open | Cannot be overridden via `Configuration`; shared across all tests |
+| `Connection` uses Java serialization                                              | base-network                                                       | **Security**            | ⏭ Deferred | Remote code execution surface via gadget chains |
+| `Connection` uses `synchronized` with Virtual Threads                             | base-network                                                       | **Performance**         | ⏭ Deferred | Pins carrier thread on JDK <24 |
+| ~~Multiple correctness and threading bugs in telemetry modules~~                  | ~~base-telemetry, base-telemetry-foundation, base-telemetry-ansi~~ | ~~**Bug**~~             | ✅ Fixed | |
 
 ---
 

@@ -37,7 +37,7 @@ public interface Commenced
     extends Telemetry {
 
     /**
-     * Creates {@link Information} {@link Telemetry}.
+     * Creates {@link Commenced} {@link Telemetry}.
      *
      * @param uri       the source {@link URI}
      * @param locations the {@link Location}s
@@ -53,7 +53,7 @@ public interface Commenced
         Objects.requireNonNull(uri, "The source uri must not be null");
 
         final Instant instant = Instant.now();
-        final String message = String.format(format, args);
+        final String message = format == null ? "" : String.format(format, args);
         final ArrayList<Location> locationList = locations.collect(Collectors.toCollection(ArrayList::new));
 
         return new Commenced() {
@@ -96,7 +96,7 @@ public interface Commenced
     }
 
     /**
-     * Creates {@link Information} {@link Telemetry}.
+     * Creates {@link Commenced} {@link Telemetry}.
      *
      * @param uri    the source {@link URI}
      * @param format the formatted message

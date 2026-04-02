@@ -85,7 +85,7 @@ public interface Progress
         Objects.requireNonNull(unit, "The NamedUnit must not be null");
 
         final Instant instant = Instant.now();
-        final String message = String.format(format, args);
+        final String message = format == null ? "" : String.format(format, args);
 
         return new Progress() {
             @Override
