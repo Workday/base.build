@@ -77,7 +77,9 @@ public class ANSIBasedTelemetryRecorder
 
                     render();
                 } catch (final InterruptedException e) {
-                    Thread.currentThread().interrupt();
+                    // Intentionally ignored — this thread exits only when close() completes
+                    // renderFuture. Re-interrupting would cause a busy-loop since the loop
+                    // condition does not check the interrupt flag.
                 }
             }
         });

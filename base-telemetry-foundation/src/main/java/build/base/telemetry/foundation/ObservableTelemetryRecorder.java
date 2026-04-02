@@ -36,7 +36,9 @@ import build.base.telemetry.TelemetryRecorderFactory;
 import build.base.telemetry.Warning;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -87,6 +89,9 @@ public class ObservableTelemetryRecorder
      */
     private <T extends Telemetry> T record(final T telemetry) {
 
+        // Synchronize only for the add so that writes are O(1). Reads (stream, hasObserved)
+        // take a snapshot under the same lock and then traverse outside it, keeping write
+        // throughput independent of how long callers spend consuming the stream.
         synchronized (this.telemetry) {
             this.telemetry.add(telemetry);
         }
@@ -99,8 +104,10 @@ public class ObservableTelemetryRecorder
      * @return the {@link Stream} of observed {@link Telemetry}
      */
     public Stream<Telemetry> stream() {
+        // Snapshot under lock, traverse outside — lock held only for the O(n) copy,
+        // not for the duration of stream consumption by the caller.
         synchronized (this.telemetry) {
-            return new java.util.ArrayList<>(this.telemetry).stream();
+            return new ArrayList<>(this.telemetry).stream();
         }
     }
 
@@ -112,9 +119,16 @@ public class ObservableTelemetryRecorder
      * {@code false} otherwise
      */
     public boolean hasObserved(final Predicate<? super Telemetry> predicate) {
-        synchronized (this.telemetry) {
-            return predicate != null && this.telemetry.stream().anyMatch(predicate);
+        if (predicate == null) {
+            return false;
         }
+        // Same snapshot pattern as stream() — lock released before predicate evaluation
+        // so that a slow predicate does not block recording threads.
+        final List<Telemetry> snapshot;
+        synchronized (this.telemetry) {
+            snapshot = new ArrayList<>(this.telemetry);
+        }
+        return snapshot.stream().anyMatch(predicate);
     }
 
     /**
