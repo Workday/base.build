@@ -21,9 +21,11 @@ package build.base.telemetry.foundation;
  */
 
 import build.base.telemetry.Error;
+import build.base.telemetry.Fatal;
 import build.base.telemetry.Telemetry;
 import build.base.telemetry.TelemetryRecorder;
 import build.base.telemetry.TelemetryRecorderFactory;
+import build.base.telemetry.Warning;
 
 import java.io.PrintStream;
 import java.net.URI;
@@ -68,7 +70,7 @@ public class PrintStreamTelemetryRecorder
     @Override
     protected <T extends Telemetry> T record(final T telemetry) {
 
-        if (telemetry instanceof Error) {
+        if (telemetry instanceof Error || telemetry instanceof Fatal || telemetry instanceof Warning) {
             this.errorStream.println(telemetry);
         } else {
             this.outputStream.println(telemetry);

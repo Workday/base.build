@@ -191,4 +191,66 @@ class ProgressBarTests {
                 .contains("50 MB of 100 MB completed");
         }
     }
+
+    /**
+     * BUG-3: When {@code total == 0}, {@code (double) progress / total * 100} is NaN,
+     * which silently becomes {@code 0} when cast to int, showing "0%" for all progress.
+     */
+    @Test
+    void shouldShowZeroPercentWhenTotalIsZero() {
+        try (final var recorder = ANSIBasedTelemetryRecorder.create()) {
+            final var progressBar = recorder.commence(0, "Zero total");
+
+            // Should not throw and should display 0%
+            assertThat(progressBar.toString()).contains("  0%");
+        }
+    }
+
+    /**
+     * BUG-4: A negative delta was accepted without clamping, driving the internal counter
+     * below zero and producing a negative percentage / negative {@code filledLength}.
+     */
+    @Test
+    void shouldClampProgressAtZeroWhenNegativeDeltaApplied() {
+        try (final var recorder = ANSIBasedTelemetryRecorder.create()) {
+            final var progressBar = recorder.commence(10, "Task");
+
+            progressBar.progress(3);
+            progressBar.progress(-5); // would go to -2 without clamping
+
+            assertThat(progressBar.toString()).contains("  0%");
+        }
+    }
+
+    /**
+     * BUG-5: The internal counter accumulated unclamped while the underlying {@link build.base.telemetry.Meter}
+     * clamped at {@code maximum}. After excess progress, the bar showed >100%.
+     */
+    @Test
+    void shouldNotExceedOneHundredPercentWhenOverProgress() {
+        try (final var recorder = ANSIBasedTelemetryRecorder.create()) {
+            final var progressBar = recorder.commence(10, "Task");
+
+            progressBar.progress(8);
+            progressBar.progress(5); // unclamped counter → 13, clamped should stay at 10
+
+            assertThat(progressBar.toString()).contains("100%");
+        }
+    }
+
+    /**
+     * BUG-6: {@code close()} never updated the internal counter to {@code total},
+     * so a render racing with {@code close()} showed the pre-close progress instead of 100%.
+     */
+    @Test
+    void shouldShowOneHundredPercentAfterClose() {
+        try (final var recorder = ANSIBasedTelemetryRecorder.create()) {
+            final var progressBar = (ProgressBar) recorder.commence(10, "Task");
+
+            progressBar.progress(5);
+            progressBar.close();
+
+            assertThat(progressBar.toString()).contains("100%");
+        }
+    }
 }

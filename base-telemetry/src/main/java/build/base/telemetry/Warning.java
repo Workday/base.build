@@ -58,7 +58,7 @@ public interface Warning
         Objects.requireNonNull(uri, "The source uri must not be null");
 
         final Instant instant = Instant.now();
-        final String message = String.format(format, args);
+        final String message = format == null ? "" : String.format(format, args);
         final Optional<Throwable> optional = Optional.ofNullable(throwable);
         final ArrayList<Location> locationList = locations.collect(Collectors.toCollection(ArrayList::new));
 

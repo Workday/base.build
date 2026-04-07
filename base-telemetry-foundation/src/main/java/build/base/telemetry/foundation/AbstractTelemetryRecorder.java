@@ -138,8 +138,8 @@ public abstract class AbstractTelemetryRecorder
             ? UUID.randomUUID().toString()
             : String.format(format, args);
 
-        // record that the Activity is commencing
-        final var commenced = record(Commenced.create(this.uri, description, args));
+        // record that the Activity is commencing (use "%s" to pass already-formatted description without re-formatting)
+        final var commenced = record(Commenced.create(this.uri, "%s", description));
 
         final AtomicBoolean completed = new AtomicBoolean(false);
         final var self = this;
@@ -200,6 +200,11 @@ public abstract class AbstractTelemetryRecorder
         return new Meter() {
             @Override
             public boolean progress(final int delta, final String format, final Object... arguments) {
+                // NOTE: compareAndSet(false, false) is a non-atomic read — it returns true if
+                // the current value is false but does not change it. A concurrent call to
+                // complete() can set `completed` to true between this check and the record()
+                // call below, resulting in a spurious Progress event after the Completed event.
+                // The window is very narrow and the consequence is minor, but it is a real race.
                 if (completed.compareAndSet(false, false)) {
                     // attempt to update the progress (not going over the maximum)
                     final int previous = progress.getAndUpdate(current -> Math.min((current + delta), maximum));

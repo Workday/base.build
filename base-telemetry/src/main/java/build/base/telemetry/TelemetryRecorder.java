@@ -404,7 +404,7 @@ public interface TelemetryRecorder {
      * @return the created {@link Diagnostic} {@link Telemetry}
      */
     default Diagnostic diagnostic(final Location location, final String format, final Object... args) {
-        return diagnostic(location == null ? Stream.empty() : Stream.of(location), null, format, args);
+        return diagnostic(location == null ? Stream.empty() : Stream.of(location), format, args);
     }
 
     /**

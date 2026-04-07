@@ -62,7 +62,7 @@ public class ProgressBar
     /**
      * The currently {@link Capture}d message for the {@link ProgressBar}.
      */
-    private Capture<String> message;
+    private final Capture<String> message;
 
     /**
      * The {@link NamedUnit} of measure for the progress tracked by this {@link ProgressBar}.
@@ -102,7 +102,7 @@ public class ProgressBar
 
     @Override
     public boolean progress(final int delta, final String format, final Object... arguments) {
-        this.progress.addAndGet(delta);
+        this.progress.getAndUpdate(current -> Math.min(Math.max(0, current + delta), this.total));
 
         if (!Strings.isEmpty(format)) {
             this.message.set(String.format(format, arguments));
@@ -128,6 +128,7 @@ public class ProgressBar
 
     @Override
     public void close() {
+        this.progress.set(this.total);
         this.meter.close();
 
         // remove this ProgressBar from the ActivityManager
@@ -137,7 +138,7 @@ public class ProgressBar
     @Override
     public String toString() {
         final var progress = this.progress.get();
-        final var percentage = (int) ((double) progress / this.total * 100);
+        final var percentage = this.total == 0 ? 0 : (int) ((double) progress / this.total * 100);
 
         final StringBuilder builder = new StringBuilder();
         // set the color to green

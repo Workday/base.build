@@ -36,7 +36,7 @@ public interface TextualRange
     /**
      * The starting {@link TextualPosition} for the range of text.
      *
-     * @return the end {@link TextualPosition}
+     * @return the start {@link TextualPosition}
      */
     TextualPosition start();
 
