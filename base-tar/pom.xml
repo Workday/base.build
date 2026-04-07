@@ -2,44 +2,16 @@
 <project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xmlns="http://maven.apache.org/POM/4.0.0"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-
     <modelVersion>4.0.0</modelVersion>
-
     <parent>
         <groupId>build.base</groupId>
         <artifactId>base-project</artifactId>
         <version>${revision}</version>
     </parent>
-
-    <artifactId>base-archiving</artifactId>
-
-    <name>base.build Archiving</name>
-    <description>Archiving utilities providing TAR archive creation and extraction support.</description>
-
+    <artifactId>base-tar</artifactId>
+    <name>base.build Tar</name>
+    <description>Zero-dependency POSIX ustar Tape Archive (TAR) support.</description>
     <dependencies>
-        <dependency>
-            <groupId>build.base</groupId>
-            <artifactId>base-foundation</artifactId>
-            <version>${revision}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>build.base</groupId>
-            <artifactId>base-configuration</artifactId>
-            <version>${revision}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>build.base</groupId>
-            <artifactId>base-option</artifactId>
-            <version>${revision}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>build.base</groupId>
-            <artifactId>base-tar</artifactId>
-            <version>${revision}</version>
-        </dependency>
 
         <!-- Test Dependencies -->
         <dependency>
@@ -55,5 +27,6 @@
             <version>${assertj.version}</version>
             <scope>test</scope>
         </dependency>
+
     </dependencies>
 </project>

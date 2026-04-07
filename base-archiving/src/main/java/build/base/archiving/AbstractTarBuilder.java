@@ -21,9 +21,9 @@ package build.base.archiving;
  */
 
 import build.base.foundation.Closeables;
-import org.kamranzafar.jtar.TarEntry;
-import org.kamranzafar.jtar.TarHeader;
-import org.kamranzafar.jtar.TarOutputStream;
+import build.base.tar.TarEntry;
+import build.base.tar.TarHeader;
+import build.base.tar.TarOutputStream;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;

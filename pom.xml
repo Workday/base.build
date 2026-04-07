@@ -115,6 +115,7 @@
         <module>base-query</module>
         <module>base-retryable</module>
         <module>base-table</module>
+        <module>base-tar</module>
         <module>base-telemetry</module>
         <module>base-telemetry-ansi</module>
         <module>base-telemetry-foundation</module>

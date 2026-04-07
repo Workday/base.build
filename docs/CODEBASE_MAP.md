@@ -473,7 +473,7 @@ JarBuilder jar = new JarBuilder()
     .build(outputPath);
 ```
 
-**Dependencies:** `base-foundation`, `base-configuration`, `base-option`, `jtar` (external).
+**Dependencies:** `base-foundation`, `base-configuration`, `base-option`, `base-tar`.
 
 ---
 
