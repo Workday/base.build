@@ -5,6 +5,8 @@ import build.base.configuration.Configuration;
 import build.base.configuration.Option;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.stream.Stream;
 
@@ -570,6 +572,155 @@ class CommandLineParserTests {
             assertThrows(IllegalArgumentException.class, () -> parser.parse(
                 CommandLineParser.OPTION_CLASS_OVERRIDE, ZeroArgumentOption2.class.getName(), "-default"));
         System.out.println(illegalDisambiguationException.toString());
+    }
+
+    /**
+     * Ensure {@link CommandLineParser#setHelpUsageArguments(String)} appends the positional label to the usage line.
+     */
+    @Test
+    void shouldIncludePositionalArgumentsInUsageLine() {
+        final List<String> helpOutput = new ArrayList<>();
+
+        final var parser = new CommandLineParser()
+            .setHelpUsageProgramName("spin")
+            .setHelpUsageArguments("<task>...")
+            .setHelpHandler(helpOutput::add)
+            .add(ZeroArgumentOption.class);
+
+        parser.parse("--help");
+
+        assertThat(helpOutput).hasSize(1);
+        assertThat(helpOutput.getFirst()).contains("Usage: spin [options] <task>...");
+    }
+
+    /**
+     * Ensure {@link CommandLineParser#setHelpUsageProgramName(String)} without positional arguments only shows
+     * {@code [options]} on the usage line.
+     */
+    @Test
+    void shouldIncludeOnlyOptionsInUsageLineWhenNoPositionalArgumentsSet() {
+        final List<String> helpOutput = new ArrayList<>();
+
+        final var parser = new CommandLineParser()
+            .setHelpUsageProgramName("spin")
+            .setHelpHandler(helpOutput::add)
+            .add(ZeroArgumentOption.class);
+
+        parser.parse("--help");
+
+        assertThat(helpOutput).hasSize(1);
+        assertThat(helpOutput.getFirst()).contains("Usage: spin [options]");
+        assertThat(helpOutput.getFirst()).doesNotContain("<task>");
+    }
+
+    /**
+     * Ensure {@link CommandLineParser#setHelpHandler(java.util.function.Consumer)} is called with help text
+     * instead of throwing a {@link CommandLineParser.HelpException}.
+     */
+    @Test
+    void shouldCallHelpHandlerInsteadOfThrowing() {
+        final List<String> helpOutput = new ArrayList<>();
+
+        final var parser = new CommandLineParser()
+            .setHelpHandler(helpOutput::add)
+            .add(ZeroArgumentOption.class);
+
+        // should not throw
+        final var result = parser.parse("--help");
+
+        assertThat(helpOutput).hasSize(1);
+        assertThat(result.stream()).isEmpty();
+    }
+
+    /**
+     * Ensure that without a help handler, {@link CommandLineParser.HelpException} is still thrown.
+     */
+    @Test
+    void shouldStillThrowHelpExceptionWhenNoHandlerIsSet() {
+        final var parser = new CommandLineParser()
+            .add(ZeroArgumentOption.class);
+
+        assertThrows(CommandLineParser.HelpException.class, () -> parser.parse("--help"));
+    }
+
+    /**
+     * Ensure {@link CommandLineParser#setPositionalArgumentConsumer(java.util.function.Consumer)} receives
+     * non-hyphen-prefixed arguments.
+     */
+    @Test
+    void shouldRoutePositionalArgsToPositionalConsumer() {
+        final List<String> positionals = new ArrayList<>();
+
+        final var parser = new CommandLineParser()
+            .setPositionalArgumentConsumer(positionals::add);
+
+        parser.parse("compile", "test", "jlink");
+
+        assertThat(positionals).containsExactly("compile", "test", "jlink");
+    }
+
+    /**
+     * Ensure positional arguments and named options are correctly separated when both a positional consumer
+     * and option classes are registered — modelling the primary spin use case.
+     */
+    @Test
+    void shouldSeparatePositionalArgsFromOptions() {
+        final List<String> positionals = new ArrayList<>();
+
+        final var parser = new CommandLineParser()
+            .add(ZeroArgumentOption.class)
+            .add(OneArgumentOption.class)
+            .setPositionalArgumentConsumer(positionals::add);
+
+        final var configuration = parser.parse(
+                "-default", "compile", "-enabled", "true", "test", "jlink")
+            .build();
+
+        assertThat(positionals).containsExactly("compile", "test", "jlink");
+        assertThat(configuration.get(ZeroArgumentOption.class)).isNotNull();
+        assertThat(configuration.get(OneArgumentOption.class)).isEqualTo(OneArgumentOption.of(true));
+    }
+
+    /**
+     * Ensure hyphen-prefixed unknown arguments still fall through to the {@link CommandLineParser.UnknownOptionConsumer}
+     * when a positional consumer is set.
+     */
+    @Test
+    void shouldRouteHyphenPrefixedUnknownsToUnknownOptionConsumer() {
+        final List<String> positionals = new ArrayList<>();
+
+        final var parser = new CommandLineParser()
+            .setPositionalArgumentConsumer(positionals::add)
+            .setUnknownOptionConsumer(CommandLineParser.IGNORE_UNKNOWN_OPTIONS)
+            .add(ZeroArgumentOption.class);
+
+        final var configuration = parser.parse(
+                "-default", "--unknown-flag", "my-task")
+            .build();
+
+        // positional consumer gets the non-hyphen arg
+        assertThat(positionals).containsExactly("my-task");
+        // option was parsed correctly
+        assertThat(configuration.get(ZeroArgumentOption.class)).isNotNull();
+        // --unknown-flag was silently ignored by the unknown option consumer
+    }
+
+    /**
+     * Ensure that without a positional consumer, non-hyphen args not preceded by an option still reach the
+     * {@link CommandLineParser.UnknownOptionConsumer} as before (backward compatibility).
+     */
+    @Test
+    void shouldPreserveBackwardCompatibilityWithCaptureUnknownOptionsAsArguments() {
+        final var parser = new CommandLineParser()
+            .setUnknownOptionConsumer(CommandLineParser.CAPTURE_UNKNOWN_OPTIONS_AS_ARGUMENTS);
+
+        final var configuration = parser.parse("compile", "test").build();
+
+        final var args = configuration.stream(CommandLine.Argument.class)
+            .map(CommandLine.Argument::get)
+            .toList();
+
+        assertThat(args).containsExactly("compile", "test");
     }
 
     /**
