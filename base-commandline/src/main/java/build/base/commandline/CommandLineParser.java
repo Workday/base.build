@@ -34,9 +34,13 @@ import build.base.table.option.RowComparator;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -44,7 +48,10 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Parses {@link String} arguments, typically passed into a {@code public static void main(String... arguments)} method,
@@ -199,9 +206,19 @@ public class CommandLineParser {
     };
 
     /**
-     * The {@link Method}s used to construct each {@link Option}.
+     * {@link Method}s used to construct each {@link Option}, grouped by help section name.
+     * <p>
+     * Insertion order is preserved for both sections and methods within each section. The empty string
+     * key represents the default (unsectioned) group, which renders without a section header.
      */
-    private final Set<Method> constructionMethods;
+    private final LinkedHashMap<String, LinkedHashSet<Method>> sectionedMethods;
+
+    /**
+     * The current help section name applied to subsequently registered {@link Option}s.
+     * <p>
+     * Defaults to {@code ""} (no section header). Changed via {@link #setHelpSection(String)}.
+     */
+    private String currentHelpSection;
 
     /**
      * A {@link Map} of construction {@link Method}s by {@link CommandLine.Prefix} value.
@@ -214,6 +231,14 @@ public class CommandLineParser {
     private final Capture<UnknownOptionConsumer> unknownOptionConsumer;
 
     /**
+     * The {@link Capture}d positional argument {@link Consumer} for the {@link CommandLineParser}.
+     * <p>
+     * When set, non-hyphen-prefixed arguments that do not match any registered {@link Option} prefix are
+     * routed here rather than to the {@link #unknownOptionConsumer}.
+     */
+    private final Capture<Consumer<String>> positionalArgumentConsumer;
+
+    /**
      * Should {@link #HELP_ARGUMENT_SHORT} and {@link #HELP_ARGUMENT_LONG} arguments be ignored.
      */
     private boolean suppressHelp;
@@ -222,6 +247,29 @@ public class CommandLineParser {
      * Help text usage program name.
      */
     private String helpUsageProgramName;
+
+    /**
+     * Help text usage positional arguments label (e.g. {@code "<task>..."}).
+     */
+    private String helpUsageArguments;
+
+    /**
+     * An optional {@link Consumer} to call with the help text instead of throwing a {@link HelpException}.
+     */
+    private Consumer<String> helpHandler;
+
+    /**
+     * A {@link Function} used to resolve environment variable values by name.
+     * <p>
+     * Defaults to {@link System#getenv(String)} wrapped in {@link Optional#ofNullable(Object)}.
+     * Set to {@code null} to disable environment variable resolution entirely.
+     */
+    private Function<String, Optional<String>> envVarResolver;
+
+    /**
+     * Registered environment variable mappings: environment variable name to command-line prefix.
+     */
+    private final LinkedHashMap<String, String> envVarMappings;
 
     /**
      * Constructs a {@link CommandLineParser}.
@@ -233,8 +281,12 @@ public class CommandLineParser {
             ? x.compareTo(y)
             : y.length() - x.length());
 
-        this.constructionMethods = new HashSet<>();
+        this.sectionedMethods = new LinkedHashMap<>();
+        this.currentHelpSection = "";
         this.unknownOptionConsumer = Capture.empty();
+        this.positionalArgumentConsumer = Capture.empty();
+        this.envVarResolver = name -> Optional.ofNullable(System.getenv(name));
+        this.envVarMappings = new LinkedHashMap<>();
     }
 
     /**
@@ -245,6 +297,120 @@ public class CommandLineParser {
      */
     public CommandLineParser setHelpUsageProgramName(final String programName) {
         this.helpUsageProgramName = programName;
+
+        return this;
+    }
+
+    /**
+     * Sets the positional arguments label for the {@link CommandLineParser} help usage line.
+     * <p>
+     * When set alongside {@link #setHelpUsageProgramName(String)}, the usage line becomes:
+     * {@code Usage: <programName> [options] <arguments>}.
+     *
+     * @param arguments the positional arguments label (e.g. {@code "<task>..."})
+     * @return this {@link CommandLineParser} to permit fluent-style method invocation
+     */
+    public CommandLineParser setHelpUsageArguments(final String arguments) {
+        this.helpUsageArguments = arguments;
+
+        return this;
+    }
+
+    /**
+     * Sets a {@link Consumer} to call with the help text instead of throwing a {@link HelpException}.
+     * <p>
+     * When set, {@link #parse(String...)} will invoke the handler and return an empty
+     * {@link ConfigurationBuilder} rather than propagating a {@link HelpException}.
+     *
+     * @param handler the {@link Consumer} to receive the help text, or {@code null} to revert to exception behaviour
+     * @return this {@link CommandLineParser} to permit fluent-style method invocation
+     */
+    public CommandLineParser setHelpHandler(final Consumer<String> handler) {
+        this.helpHandler = handler;
+
+        return this;
+    }
+
+    /**
+     * Sets the current help section name for subsequently registered {@link Option}s.
+     * <p>
+     * All {@link Option}s added after this call will appear under the specified section heading in the
+     * help output, until this method is called again with a different name. Pass {@code null} or an
+     * empty string to return to the default (unsectioned) group.
+     * <p>
+     * Example output with sections:
+     * <pre>
+     * Options:
+     *   Global options
+     *     -w    ...
+     *   Task options
+     *     -j    ...
+     * </pre>
+     *
+     * @param section the section heading, or {@code null} / empty to clear
+     * @return this {@link CommandLineParser} to permit fluent-style method invocation
+     */
+    public CommandLineParser setHelpSection(final String section) {
+        this.currentHelpSection = section == null ? "" : section;
+
+        return this;
+    }
+
+    /**
+     * Sets the environment variable resolver used to look up registered environment variables.
+     * <p>
+     * Defaults to {@link System#getenv(String)} wrapped in {@link Optional#ofNullable(Object)}.
+     * Pass {@code null} to disable environment variable resolution entirely.
+     *
+     * @param resolver a function mapping an environment variable name to its {@link Optional} value,
+     *                 or {@code null} to disable
+     * @return this {@link CommandLineParser} to permit fluent-style method invocation
+     */
+    public CommandLineParser setEnvironmentVariableResolver(final Function<String, Optional<String>> resolver) {
+        this.envVarResolver = resolver;
+
+        return this;
+    }
+
+    /**
+     * Registers an environment variable fallback for the specified command-line prefix.
+     * <p>
+     * When the registered environment variable is set and no explicit command-line value for the corresponding
+     * option was provided, the environment variable value is injected as if the user had passed
+     * {@code <prefix> <value>} on the command line. Command-line arguments always take precedence because
+     * env-var-derived arguments are prepended before the actual arguments (last write wins).
+     *
+     * @param envVarName the name of the environment variable (e.g. {@code "MY_WORKING_DIR"})
+     * @param prefix     the command-line prefix this variable maps to (e.g. {@code "-w"})
+     * @return this {@link CommandLineParser} to permit fluent-style method invocation
+     */
+    public CommandLineParser registerEnvVar(final String envVarName, final String prefix) {
+        Objects.requireNonNull(envVarName, "The env var name must not be null");
+        Objects.requireNonNull(prefix, "The prefix must not be null");
+
+        this.envVarMappings.put(envVarName, prefix);
+
+        return this;
+    }
+
+    /**
+     * Sets a {@link Consumer} that receives non-hyphen-prefixed arguments that do not match any registered
+     * {@link Option} prefix.
+     * <p>
+     * This is the preferred way to declare first-class positional arguments (e.g. task names) rather than
+     * relying on {@link #CAPTURE_UNKNOWN_OPTIONS_AS_ARGUMENTS}. When a positional consumer is set, hyphen-prefixed
+     * unknowns still fall through to the {@link UnknownOptionConsumer}.
+     *
+     * @param consumer the {@link Consumer} to receive positional arguments, or {@code null} to clear
+     * @return this {@link CommandLineParser} to permit fluent-style method invocation
+     */
+    public CommandLineParser setPositionalArgumentConsumer(final Consumer<String> consumer) {
+        if (consumer == null) {
+            this.positionalArgumentConsumer.clear();
+        }
+        else {
+            this.positionalArgumentConsumer.set(consumer);
+        }
 
         return this;
     }
@@ -332,7 +498,9 @@ public class CommandLineParser {
             //                + "option will be ignored.", prefix, optionClass.getName());
         }
         else {
-            this.constructionMethods.add(method);
+            this.sectionedMethods
+                .computeIfAbsent(this.currentHelpSection, k -> new LinkedHashSet<>())
+                .add(method);
             this.prefixMethods.compute(prefix, (__, methods) -> {
                 if (methods == null) {
                     return new HashSet<>();
@@ -404,50 +572,60 @@ public class CommandLineParser {
         }
 
         if (this.helpUsageProgramName != null) {
-            helpTable.addRow("Usage: " + this.helpUsageProgramName + " [options]");
+            final var usageLine = new StringBuilder("Usage: ").append(this.helpUsageProgramName).append(" [options]");
+            if (this.helpUsageArguments != null) {
+                usageLine.append(" ").append(this.helpUsageArguments);
+            }
+            helpTable.addRow(usageLine.toString());
         }
 
         helpTable.addRow("Options:");
 
-        final var optionsTable = Table.create();
-        optionsTable.options()
-            .add(CellSeparator.of("    "))
-            .add((RowComparator) (row1, row2) -> {
-                final String row1Prefix = row1.getCell(1).getLine(0).orElse("");
-                final String row2Prefix = row2.getCell(1).getLine(0).orElse("");
-                return PREFIX_COMPARATOR.compare(row1Prefix, row2Prefix);
+        this.sectionedMethods.forEach((section, methods) -> {
+            if (!section.isEmpty()) {
+                helpTable.addRow("  " + section);
+            }
+
+            final var optionsTable = Table.create();
+            optionsTable.options()
+                .add(CellSeparator.of("    "))
+                .add((RowComparator) (row1, row2) -> {
+                    final String row1Prefix = row1.getCell(1).getLine(0).orElse("");
+                    final String row2Prefix = row2.getCell(1).getLine(0).orElse("");
+                    return PREFIX_COMPARATOR.compare(row1Prefix, row2Prefix);
+                });
+
+            methods.forEach(method -> {
+                // create an internal table for the option information that orders rows by the prefix for that row
+                final var optionTable = Table.create();
+
+                // add the prefixes to the option table
+                optionTable.addRow(String.join(", ",
+                    Arrays.stream(method.getAnnotationsByType(CommandLine.Prefix.class))
+                        .map(CommandLine.Prefix::value)
+                        .collect(Collectors.toCollection(() -> new TreeSet<>(PREFIX_COMPARATOR)))));
+
+                // create a new table for the class/description
+                final var infoTable = Table.create();
+                infoTable.options().add(CellSeparator.of("    "));
+
+                // add the option class as a new row
+                infoTable.addRow(Cell.create(), Cell.of("(" + method.getDeclaringClass().getName() + ")"));
+
+                // add the description if it exists
+                Optional.ofNullable(method.getAnnotation(CommandLine.Description.class))
+                    .map(CommandLine.Description::value)
+                    .ifPresent(description -> infoTable.addRow(Cell.create(), Cell.of(description)));
+
+                // add the info table to the optionTable
+                optionTable.addRow(infoTable.toString());
+
+                // add the table as a new row to the optionsTable
+                optionsTable.addRow(Cell.create(), Cell.of(optionTable.toString()));
             });
 
-        this.constructionMethods.forEach(method -> {
-            // create an internal table for the option information that orders rows by the prefix for that row
-            final var optionTable = Table.create();
-
-            // add the prefixes to the option table
-            optionTable.addRow(String.join(", ",
-                Arrays.stream(method.getAnnotationsByType(CommandLine.Prefix.class))
-                    .map(CommandLine.Prefix::value)
-                    .collect(Collectors.toCollection(() -> new TreeSet<>(PREFIX_COMPARATOR)))));
-
-            // create a new table for the class/description
-            final var infoTable = Table.create();
-            infoTable.options().add(CellSeparator.of("    "));
-
-            // add the option class as a new row
-            infoTable.addRow(Cell.create(), Cell.of("(" + method.getDeclaringClass().getName() + ")"));
-
-            // add the description if it exists
-            Optional.ofNullable(method.getAnnotation(CommandLine.Description.class))
-                .map(CommandLine.Description::value)
-                .ifPresent(description -> infoTable.addRow(Cell.create(), Cell.of(description)));
-
-            // add the info table to the optionTable
-            optionTable.addRow(infoTable.toString());
-
-            // add the table as a new row to the optionsTable
-            optionsTable.addRow(Cell.create(), Cell.of(optionTable.toString()));
+            helpTable.addRow(optionsTable.toString());
         });
-
-        helpTable.addRow(optionsTable.toString());
 
         throw new HelpException(helpTable.toString());
     }
@@ -465,11 +643,67 @@ public class CommandLineParser {
     public ConfigurationBuilder parse(final String... arguments)
         throws IllegalArgumentException {
 
+        try {
+            return doParse(arguments);
+        }
+        catch (final HelpException e) {
+            if (this.helpHandler != null) {
+                this.helpHandler.accept(e.getMessage());
+                return ConfigurationBuilder.create();
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Synthesizes command-line arguments derived from registered environment variables.
+     * <p>
+     * For each registered env var that has a value, injects {@code prefix} followed by the value
+     * (for options with parameters) or just {@code prefix} (for zero-parameter flags).
+     * Returns an empty list when no resolver is set or no env vars are registered.
+     *
+     * @return a list of synthesized arguments to prepend before the actual command-line arguments
+     */
+    private List<String> synthesizeEnvVarArgs() {
+        if (this.envVarResolver == null || this.envVarMappings.isEmpty()) {
+            return List.of();
+        }
+
+        final var args = new ArrayList<String>();
+
+        this.envVarMappings.forEach((envVarName, prefix) ->
+            this.envVarResolver.apply(envVarName).ifPresent(value -> {
+                final var methods = this.prefixMethods.get(prefix);
+                if (methods != null && !methods.isEmpty()) {
+                    final var method = methods.iterator().next();
+                    args.add(prefix);
+                    if (method.getParameterCount() > 0) {
+                        args.add(value);
+                    }
+                }
+            }));
+
+        return args;
+    }
+
+    /**
+     * Internal implementation of {@link #parse(String...)}.
+     */
+    private ConfigurationBuilder doParse(final String... arguments) {
+
         final var configurationBuilder = ConfigurationBuilder.create();
 
-        final var canonical = arguments == null || arguments.length == 0
+        // prepend env-var-derived args; command-line args come after and override (last write wins)
+        final var envVarArgs = synthesizeEnvVarArgs();
+        final String[] effectiveArguments = envVarArgs.isEmpty()
             ? arguments
-            : Arrays.stream(arguments)
+            : Stream.concat(envVarArgs.stream(),
+                arguments != null ? Arrays.stream(arguments) : Stream.empty())
+                .toArray(String[]::new);
+
+        final var canonical = effectiveArguments == null || effectiveArguments.length == 0
+            ? effectiveArguments
+            : Arrays.stream(effectiveArguments)
                 .map(Strings::trim)
                 .filter(string -> !Strings.isEmpty(string))
                 .flatMap(string -> Arrays.stream(string.split("=")))
@@ -603,8 +837,15 @@ public class CommandLineParser {
                 .map(configurationBuilder::add)
                 .isPresent()) {
 
-                // attempt to consume the unknown argument
-                if (!this.unknownOptionConsumer
+                // route non-hyphen-prefixed arguments to the positional consumer when set
+                if (this.positionalArgumentConsumer.isPresent() && !current.startsWith("-")) {
+                    this.positionalArgumentConsumer.map(consumer -> {
+                        consumer.accept(current);
+                        return null;
+                    });
+                }
+                // otherwise attempt to consume as an unknown option
+                else if (!this.unknownOptionConsumer
                     .map(consumer -> consumer.consume(current, configurationBuilder))
                     .orElse(false)) {
 

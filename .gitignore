@@ -20,6 +20,7 @@
 # Build System files
 target/
 .flattened-pom.xml
+.build/
 
 # Virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*

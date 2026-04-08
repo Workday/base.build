@@ -210,21 +210,6 @@ No file, environment variable, or system property sourcing beyond individual `@D
 | `Connection` uses `synchronized` with Virtual Threads                             | base-network                                                       | **Performance**         | ⏭ Deferred | Pins carrier thread on JDK <24 |
 | ~~Multiple correctness and threading bugs in telemetry modules~~                  | ~~base-telemetry, base-telemetry-foundation, base-telemetry-ansi~~ | ~~**Bug**~~             | ✅ Fixed | |
 
----
-
-## Unused POM Properties
-
-Five version properties in the root POM are pure forward-looking placeholders with zero usage anywhere in the codebase. They were introduced in the initial commit and have never been consumed by any module.
-
-| Property | Version | Intended Future Module |
-|---|---|---|
-| `jakarta-inject.version` | 2.0.1 | DI container (`base-inject`) |
-| `kie-dmn-feel.version` | 9.44.0.Final | DMN/business-rules expression module |
-| `mustache-java.version` | 0.9.14 | Template engine (`base-template`) |
-| `auto-service.version` | 1.1.1 | Annotation processor module |
-| `compile-testing.version` | 0.21.0 | Annotation processor test harness |
-
-None of these have a corresponding `<dependency>` entry in the root `<dependencyManagement>` block — they exist only as `<properties>`. They are safe to keep as intent markers or remove to reduce confusion.
 
 ---
 
