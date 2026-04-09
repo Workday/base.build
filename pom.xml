@@ -116,6 +116,7 @@
         <module>base-telemetry-foundation</module>
         <module>base-transport</module>
         <module>base-transport-json</module>
+        <module>base-version</module>
     </modules>
 
     <build>
