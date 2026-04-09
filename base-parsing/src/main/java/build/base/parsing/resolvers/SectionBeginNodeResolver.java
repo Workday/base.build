@@ -1,0 +1,50 @@
+package build.base.parsing.resolvers;
+
+/*-
+ * #%L
+ * base.build Parsing
+ * %%
+ * Copyright (C) 2025 Workday Inc
+ * %%
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * #L%
+ */
+
+import build.base.parsing.Token;
+
+/**
+ * Marks the beginning of a grouped section (e.g. an opening parenthesis).
+ * Never resolved — consumed by the matching {@link SectionEndNodeResolver}.
+ *
+ * @param <N> the node type
+ *
+ * @author tim.berston
+ * @since Nov-2024
+ */
+public class SectionBeginNodeResolver<N>
+    extends AbstractNodeResolver<N> {
+
+    /**
+     * Constructs a new {@link SectionBeginNodeResolver}.
+     *
+     * @param token the token to resolve
+     */
+    public SectionBeginNodeResolver(final Token<N> token) {
+        super(token);
+    }
+
+    @Override
+    public N resolve() {
+        throw new IllegalStateException("'resolve' should never be called on SectionBeginNodeResolver.");
+    }
+}
