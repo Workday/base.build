@@ -28,4 +28,6 @@ module build.base.parsing {
     requires build.base.io;
 
     exports build.base.parsing;
+    exports build.base.parsing.resolvers;
+    exports build.base.parsing.tokenparsers;
 }
