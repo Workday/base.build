@@ -102,6 +102,21 @@ Three complementary extensibility mechanisms coexist:
 
 ---
 
+## base-graph Integration Roadmap
+
+`base-graph` was added to give the library a shared, well-tested graph abstraction. The intent is for higher-level modules to depend on it rather than rolling their own traversal. Findings per module:
+
+| Module | Integration potential | Blocker |
+|---|---|---|
+| `base-foundation` | None — excluded by design | `base-foundation` is the root of the dependency tree; having it depend on `base-graph` would be architecturally backwards (and likely circular). `Streams.topologicalSort()` stays. |
+| `base-mereology` | **Limited** — additive only (cycle detection guard + `Composites.toGraph()`) | Mereology's iterators are lazy (compute-on-demand); `GraphTraversal` materializes eagerly. The parthood iterators also track `Entity` hierarchy context that base-graph has no model for. Deep replacement would require lazy traversal support in base-graph. |
+| `base-query` | **Promising** — `Scope.DepthFirst`/`BreadthFirst` are unimplemented stubs (`HeapBasedIndex.traverse()` returns empty iterators). A `GraphIndex<V>` class in `base-graph` wrapping a `Graph<V>` and implementing `traverse()` via `GraphTraversal` would make them work. Clean integration — implementing a placeholder, not replacing working code. | None identified. |
+| `base-flow` | **Not viable at the framework level.** The pub/sub topology is implicit and dynamic — each `SubscriberRegistry` only knows its own subscribers, not the full graph. Cycle detection would require the caller to explicitly model the full topology as a `Graph<Publisher>` and validate it before wiring. That's useful application-level advice but there is nothing in base-flow itself to change. | Topology is implicit and dynamic; incompatible with the static immutable `Graph<V>` model. |
+
+**Next step:** `base-query` is the only viable integration. A `GraphIndex<V>` in `base-graph` implementing the existing `traverse()` stubs via `GraphTraversal` would make `Scope.DepthFirst`/`BreadthFirst` actually work. If `base-mereology` is ever revisited, the prerequisite is a lazy/streaming traversal API in `base-graph`.
+
+---
+
 ## Major Enhancements to Existing Modules
 
 ### Bridge the Two Error Models
