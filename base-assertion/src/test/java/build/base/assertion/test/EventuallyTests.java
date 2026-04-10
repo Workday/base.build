@@ -1,5 +1,6 @@
-package build.base.assertion;
+package build.base.assertion.test;
 
+import build.base.assertion.Eventually;
 import build.base.option.Timeout;
 import build.base.retryable.EphemerallyFailingRetryable;
 import build.base.retryable.PermanentFailureException;
