@@ -1,5 +1,6 @@
-package build.base.assertion;
+package build.base.assertion.test;
 
+import build.base.assertion.IteratorPatternMatcherRetryableAssertion;
 import build.base.option.Timeout;
 import build.base.retryable.Retryable;
 import org.junit.jupiter.api.Test;

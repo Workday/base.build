@@ -1,5 +1,6 @@
-package build.base.assertion;
+package build.base.assertion.test;
 
+import build.base.assertion.CompletableFutureAssertion;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CompletableFuture;
