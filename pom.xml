@@ -99,6 +99,7 @@
         <module>base-expression</module>
         <module>base-flow</module>
         <module>base-foundation</module>
+        <module>base-graph</module>
         <module>base-io</module>
         <module>base-logging</module>
         <module>base-marshalling</module>
