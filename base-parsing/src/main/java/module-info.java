@@ -25,7 +25,7 @@
  */
 module build.base.parsing {
     requires build.base.foundation;
-    requires build.base.io;
+    requires transitive build.base.io;
 
     exports build.base.parsing;
     exports build.base.parsing.resolvers;

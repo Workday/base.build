@@ -1,4 +1,4 @@
-package build.base.expression;
+package build.base.expression.compat;
 
 /*-
  * #%L
@@ -9,9 +9,9 @@ package build.base.expression;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,28 +30,16 @@ import java.util.Objects;
  *
  * @author brian.oliver
  * @since Nov-2024
+ * @deprecated Use the Jakarta EL API directly via {@link jakarta.el.ExpressionFactory}.
  */
+@Deprecated
 public class Variable
     implements Resolvable<Object>, Option, MappedOption<String> {
 
-    /**
-     * The {@link String} representing the base/property name of the {@link Variable}.
-     */
     private final String name;
-
-    /**
-     * The {@link Object} which the name can be resolved to during {@link jakarta.el.ValueExpression} evaluation.
-     */
     private final Object value;
 
-    /**
-     * Constructs a {@link Variable}.
-     *
-     * @param name  the {@link Variable} name
-     * @param value the {@code null}able {@link Variable} value
-     */
     private Variable(final String name, final Object value) {
-
         this.name = Objects.requireNonNull(name, "Variable name must not be null");
         this.value = value;
     }

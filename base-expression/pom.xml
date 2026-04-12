@@ -19,13 +19,25 @@
     <dependencies>
         <dependency>
             <groupId>build.base</groupId>
+            <artifactId>base-configuration</artifactId>
+            <version>${revision}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>build.base</groupId>
             <artifactId>base-foundation</artifactId>
             <version>${revision}</version>
         </dependency>
 
         <dependency>
             <groupId>build.base</groupId>
-            <artifactId>base-configuration</artifactId>
+            <artifactId>base-io</artifactId>
+            <version>${revision}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>build.base</groupId>
+            <artifactId>base-parsing</artifactId>
             <version>${revision}</version>
         </dependency>
 
@@ -33,12 +45,6 @@
             <groupId>jakarta.el</groupId>
             <artifactId>jakarta.el-api</artifactId>
             <version>${jakarta-el-api.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.glassfish</groupId>
-            <artifactId>jakarta.el</artifactId>
-            <version>${jakarta-el-implementation.version}</version>
         </dependency>
 
         <!-- Test Dependencies -->
@@ -55,46 +61,5 @@
             <version>${assertj.version}</version>
             <scope>test</scope>
         </dependency>
-
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <version>${mockito.version}</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>dependency-properties</id>
-                        <goals>
-                            <goal>properties</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <ignoredUnusedDeclaredDependencies>
-                        <!-- ServiceLoader-discovered EL implementation; no direct class imports -->
-                        <ignoredUnusedDeclaredDependency>org.glassfish:jakarta.el</ignoredUnusedDeclaredDependency>
-                        <!-- needed for javaagent -->
-                        <ignoredUnusedDeclaredDependency>org.mockito:mockito-core</ignoredUnusedDeclaredDependency>
-                    </ignoredUnusedDeclaredDependencies>
-                </configuration>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>${maven-surefire-plugin.version}</version>
-                <configuration>
-                    <argLine>-XX:+EnableDynamicAgentLoading -javaagent:${org.mockito:mockito-core:jar}</argLine>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>

@@ -9,9 +9,9 @@ package build.base.expression.option;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,7 +21,7 @@ package build.base.expression.option;
  */
 
 import build.base.configuration.Option;
-import build.base.expression.Processor;
+import build.base.expression.compat.Processor;
 
 /**
  * An {@link Option} that is capable of being resolved into a new {@link Option} when using

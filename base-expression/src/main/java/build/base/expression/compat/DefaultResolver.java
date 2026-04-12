@@ -1,4 +1,4 @@
-package build.base.expression;
+package build.base.expression.compat;
 
 /*-
  * #%L
@@ -9,9 +9,9 @@ package build.base.expression;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -29,9 +29,6 @@ import java.util.Map;
 /**
  * An {@link ELResolver} for {@link Processor}s allowing the resolution of chained methods and properties without
  * requiring backing beans.
- * <p>
- * For example: This {@link ELResolver} allows "application.properties" to be evaluated if the {@link String}
- * "application.properties" is stored with a value even if the value of "application" is not an {@link Object}.
  *
  * @author graeme.campbell
  * @since Jan-2019
@@ -39,9 +36,6 @@ import java.util.Map;
 class DefaultResolver
     extends ELResolver {
 
-    /**
-     * The {@link Map} which we use to store mappings between base/property string pairs and values.
-     */
     private final Map<String, Object> storage = new HashMap<>();
 
     @Override
@@ -89,14 +83,11 @@ class DefaultResolver
 
     @Override
     public boolean isReadOnly(final ELContext context, final Object base, final Object property) {
-
         return false;
     }
 
     @Override
     public Class<?> getCommonPropertyType(final ELContext context, final Object base) {
-
-        // For AutoCompletion which we currently don't support.
         return null;
     }
 }
