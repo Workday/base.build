@@ -1,4 +1,4 @@
-package build.base.expression;
+package build.base.expression.compat;
 
 /*-
  * #%L
@@ -9,9 +9,9 @@ package build.base.expression;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -37,7 +37,9 @@ import java.util.Objects;
  * @author brian.oliver
  * @see <a href="https://docs.oracle.com/javaee/7/tutorial/jsf-el.htm">Java Expression Language Documentation</a>
  * @since Jan-2019
+ * @deprecated Use the Jakarta EL API directly via {@link jakarta.el.ExpressionFactory}.
  */
+@Deprecated
 public interface Processor {
 
     /**
@@ -58,20 +60,15 @@ public interface Processor {
      * @return the result
      * @throws ELException should parsing or evaluating the expression fail
      */
-    <T> T evaluate(String expression, Class<T> resultClass)
-        throws ELException;
+    <T> T evaluate(String expression, Class<T> resultClass) throws ELException;
 
     /**
      * Attempts to resolve {@link ResolvableOption}s or {@link jakarta.el.ValueExpression}s defined in
-     * {@link String}-based {@link ValueOption}s to produce a resolved {@link Option} of the same {@link Class}.  Should
-     * the provided {@link Option} not be a {@link ResolvableOption}, or it's a {@link String}-based {@link ValueOption}
-     * that doesn't contain any resolvable {@link jakarta.el.ValueExpression}s, or the resolution of expressions
-     * produces an equal {@link Option}, then the provided {@link Option} is returned.
+     * {@link String}-based {@link ValueOption}s to produce a resolved {@link Option} of the same {@link Class}.
      *
      * @param option the {@link Option} to resolve
      * @param <T>    the type of {@link Option}
      * @return a new resolved {@link Option} or the provided {@link Option} if not resolvable
-     * @see #replace(String)
      */
     @SuppressWarnings("unchecked")
     default <T extends Option> T resolve(final T option) {
@@ -84,14 +81,12 @@ public interface Processor {
 
             final var resolvedValue = replace(unresolvedValue);
 
-            // we only need to create a new resolved Option when the values are different
             if (Objects.equals(resolvedValue, unresolvedValue)) {
                 return option;
             }
 
             final var optionClass = valueOption.getClass();
 
-            // attempt to find a String-based public constructor we can use to create a newly resolved option
             final var stringBasedConstructor = Introspection.getAllDeclaredConstructors(optionClass)
                 .filter(constructor -> Modifier.isPublic(constructor.getModifiers()))
                 .filter(constructor -> constructor.getParameterCount() == 1
@@ -105,12 +100,10 @@ public interface Processor {
                     return (T) constructor.newInstance(resolvedValue);
                 }
                 catch (InvocationTargetException | InstantiationException | IllegalAccessException e) {
-                    // TODO: log the exception?
-                    // fall-through and attempt to used a method-based approach
+                    // fall-through
                 }
             }
 
-            // attempt to find a String-based public static method that produces an option of the same type
             final var stringBasedMethod = Introspection.getAllDeclaredMethods(optionClass)
                 .filter(method -> Modifier.isPublic(method.getModifiers()) && Modifier.isStatic(method.getModifiers()))
                 .filter(method -> optionClass.isAssignableFrom(method.getReturnType()))
@@ -124,12 +117,10 @@ public interface Processor {
                     return (T) method.invoke(null, resolvedValue);
                 }
                 catch (InvocationTargetException | IllegalAccessException e) {
-                    // TODO: log the exception
                     return option;
                 }
             }
 
-            // TODO: warn that the option could be resolved but there was no way to create a new option
             return option;
         }
         else {

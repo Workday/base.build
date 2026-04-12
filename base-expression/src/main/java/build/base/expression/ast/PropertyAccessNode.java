@@ -1,4 +1,4 @@
-package build.base.expression;
+package build.base.expression.ast;
 
 /*-
  * #%L
@@ -9,9 +9,9 @@ package build.base.expression;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,26 +21,7 @@ package build.base.expression;
  */
 
 /**
- * A named strongly-typed {@code null}able value that can be used and resolved by a {@link Processor} to evaluate
- * expressions.
- *
- * @param <T> the type of value
- * @author brian.oliver
- * @since Dec-2024
+ * Property or element access. {@code bracket=true} means {@code [key]} syntax; {@code false} means {@code .prop}.
+ * {@code key} is a Node (evaluated at runtime).
  */
-public interface Resolvable<T> {
-
-    /**
-     * The base/property name of the {@link Resolvable} value.
-     *
-     * @return the name of the {@link Resolvable} value
-     */
-    String name();
-
-    /**
-     * The named value which can be used within {@link jakarta.el.ValueExpression} evaluation.
-     *
-     * @return the value
-     */
-    T value();
-}
+public record PropertyAccessNode(Node base, Node key, boolean bracket) implements Node {}
