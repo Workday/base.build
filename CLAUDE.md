@@ -2,9 +2,9 @@
 
 ## Codebase Overview
 
-`base` is a **Java 25 multi-module Maven library** (Workday, Inc., Apache 2.0). It is organized into 23 JPMS modules covering configuration, marshalling, JSON transport, reactive flow, composite traversal, retryable operations, telemetry, CLI parsing, I/O, networking, and more. All modules share the `build.base.*` package namespace.
+`base` is a **Java 25 multi-module Maven library** (Workday, Inc., Apache 2.0). It is organized into 26 JPMS modules covering configuration, marshalling, JSON transport, reactive flow, composite traversal, retryable operations, telemetry, CLI parsing, I/O, networking, graph algorithms, version parsing, and more. All modules share the `build.base.*` package namespace.
 
-**Stack:** Java 25, Maven, JPMS (module system), Jackson Core (JSON), Jakarta EL (expression language), AssertJ + JUnit 5 Jupiter (tests).
+**Stack:** Java 25, Maven, JPMS (module system), Jackson Core (JSON), Jakarta EL 6.0 (native implementation), AssertJ + JUnit 5 Jupiter (tests).
 **Build:** `./mvnw clean install` | Publishes to **Maven Central** via GitHub Actions (`.github/workflows/release.yml` for releases, `publish-snapshot.yml` for snapshots). Requires GPG signing and `MAVEN_CENTRAL_USERNAME`/`MAVEN_CENTRAL_PASSWORD` secrets.
 
 **Structure:**
@@ -13,9 +13,11 @@
 - `base-marshalling` / `base-transport` / `base-transport-json` — annotation-driven serialization to JSON
 - `base-flow` — custom reactive Publish/Subscribe
 - `base-query` / `base-mereology` — object indexing + part-whole hierarchy traversal
+- `base-graph` — immutable directed/undirected graph library with traversal, ordering, paths, SCC, and transitive reduction
 - `base-retryable` — retryable supplier with configurable back-off
 - `base-telemetry` / `base-telemetry-foundation` / `base-telemetry-ansi` — observability
-- `base-io` / `base-network` / `base-archiving` / `base-parsing` / `base-naming` / `base-logging` / `base-table` / `base-assertion` — supporting utilities
+- `base-io` / `base-network` / `base-archiving` / `base-tar` / `base-parsing` / `base-naming` / `base-logging` / `base-table` / `base-assertion` — supporting utilities
+- `base-version` — version parsing, comparison (SemVer/Maven), ranges, and constraints
 
 For detailed architecture, see [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md).
 
