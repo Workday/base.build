@@ -9,9 +9,9 @@ package build.base.marshalling;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -70,12 +70,20 @@ public class ConcurrentSchemaFactory
     private final CopyOnWriteArraySet<Class<?>> unmarshallableClasses;
 
     /**
+     * The {@link Schema}s for explicitly registered enum {@link Class}es.
+     * Enums cannot declare {@link Marshal}/{@link Unmarshal} methods, so they are registered
+     * separately via {@link #registerEnum(Class)} and serialized by their {@link Enum#name()}.
+     */
+    private final ConcurrentHashMap<Class<?>, Schema<?>> enumSchemasByClass;
+
+    /**
      * Constructs the {@link ConcurrentSchemaFactory}.
      */
     public ConcurrentSchemaFactory() {
         this.marshallingSchemasByClass = new ConcurrentHashMap<>();
         this.unmarshallingSchemasByClass = new ConcurrentHashMap<>();
         this.unmarshallableClasses = new CopyOnWriteArraySet<>();
+        this.enumSchemasByClass = new ConcurrentHashMap<>();
     }
 
     /**
@@ -94,8 +102,7 @@ public class ConcurrentSchemaFactory
 
             try {
                 Class.forName(initializableClass.getName());
-            }
-            catch (final ClassNotFoundException e) {
+            } catch (final ClassNotFoundException e) {
                 this.unmarshallableClasses.add(initializableClass);
                 throw new IllegalArgumentException("Failed to load " + initializableClass, e);
             }
@@ -106,21 +113,19 @@ public class ConcurrentSchemaFactory
     public boolean isMarshallable(final Class<?> marshallableClass) {
         if (marshallableClass == null || this.unmarshallableClasses.contains(marshallableClass)) {
             return false;
-        }
-        else {
+        } else if (this.enumSchemasByClass.containsKey(marshallableClass)) {
+            return true;
+        } else {
             ensureInitialized(marshallableClass);
             if (this.unmarshallableClasses.contains(marshallableClass)) {
                 return false;
-            }
-            else if (this.marshallingSchemasByClass.containsKey(marshallableClass)) {
+            } else if (this.marshallingSchemasByClass.containsKey(marshallableClass)) {
                 return true;
-            }
-            else {
+            } else {
                 try {
                     register(marshallableClass);
                     return this.marshallingSchemasByClass.containsKey(marshallableClass);
-                }
-                catch (final RuntimeException e) {
+                } catch (final RuntimeException e) {
                     this.unmarshallableClasses.add(marshallableClass);
                     return false;
                 }
@@ -237,7 +242,7 @@ public class ConcurrentSchemaFactory
             this.unmarshallableClasses.add(marshallableClass);
             throw new IllegalArgumentException("The class " + marshallableClass.getName()
                 + " has @Unmarshal on method(s) " + unmarshalMethods.stream()
-                    .map(Method::getName).toList()
+                .map(Method::getName).toList()
                 + " — @Unmarshal is only supported on constructors");
         }
 
@@ -294,8 +299,7 @@ public class ConcurrentSchemaFactory
                                     });
 
                                     return false;
-                                }
-                                else {
+                                } else {
                                     return true;
                                 }
                             })
@@ -337,10 +341,62 @@ public class ConcurrentSchemaFactory
 
     @Override
     @SuppressWarnings("unchecked")
+    public <E extends Enum<E>> void registerEnum(final Class<E> enumClass) {
+
+        Objects.requireNonNull(enumClass, "The enum class must not be null");
+
+        if (!enumClass.isEnum()) {
+            throw new IllegalArgumentException("Class " + enumClass.getName() + " is not an enum");
+        }
+
+        final Parameter nameParam = new Parameter() {
+            @Override
+            public String name() {
+                return "name";
+            }
+
+            @Override
+            public Type type() {
+                return String.class;
+            }
+        };
+
+        final Schema<E> schema = new Schema<>() {
+            @Override
+            public Class<E> owner() {
+                return enumClass;
+            }
+
+            @Override
+            public Streamable<Parameter> parameters() {
+                return Streamable.of(Stream.of(nameParam));
+            }
+
+            @Override
+            public Optional<Parameter> getParameter(final String n) {
+                return "name".equals(n) ? Optional.of(nameParam) : Optional.empty();
+            }
+
+            @Override
+            public Streamable<Dependency> dependencies() {
+                return Streamable.of(Stream.empty());
+            }
+        };
+
+        this.enumSchemasByClass.putIfAbsent(enumClass, schema);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
     public <T> Optional<Schema<T>> getMarshallingSchema(final Class<T> marshallableClass) {
 
         if (marshallableClass == null) {
             return Optional.empty();
+        }
+
+        final var enumSchema = (Schema<T>) this.enumSchemasByClass.get(marshallableClass);
+        if (enumSchema != null) {
+            return Optional.of(enumSchema);
         }
 
         ensureInitialized(marshallableClass);
@@ -356,6 +412,11 @@ public class ConcurrentSchemaFactory
             return Stream.empty();
         }
 
+        final var enumSchema = (Schema<T>) this.enumSchemasByClass.get(marshallableClass);
+        if (enumSchema != null) {
+            return Stream.of(enumSchema);
+        }
+
         ensureInitialized(marshallableClass);
 
         final var schemas = this.unmarshallingSchemasByClass.get(marshallableClass);
@@ -363,7 +424,7 @@ public class ConcurrentSchemaFactory
         return schemas == null
             ? Stream.empty()
             : schemas.stream()
-                .map(schema -> (Schema<T>) schema);
+            .map(schema -> (Schema<T>) schema);
     }
 
     @Override
@@ -494,8 +555,7 @@ public class ConcurrentSchemaFactory
                             .map(out -> out.orElse(null)));
                     }
                 };
-            }
-            catch (final IllegalArgumentException | IllegalAccessException | InvocationTargetException e) {
+            } catch (final IllegalArgumentException | IllegalAccessException | InvocationTargetException e) {
                 throw new RuntimeException("Failed to marshal " + object, e);
             }
         }
@@ -611,8 +671,7 @@ public class ConcurrentSchemaFactory
             try {
                 // invoke the constructor to perform unmarshalling
                 return this.constructor.newInstance(arguments);
-            }
-            catch (final IllegalAccessException | InstantiationException | InvocationTargetException e) {
+            } catch (final IllegalAccessException | InstantiationException | InvocationTargetException e) {
                 throw new RuntimeException("Failed to unmarshal " + marshalled.schema().owner().getCanonicalName(), e);
             }
         }
@@ -658,12 +717,30 @@ public class ConcurrentSchemaFactory
         }
 
         @Override
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "rawtypes"})
         public <T> Marshalled<T> marshal(final T object) {
             Objects.requireNonNull(object, "The object to marshal must not be null");
 
             // obtain the Schema for the Object
             final var marshallableClass = (Class<T>) object.getClass();
+
+            // Check for explicitly registered enums (serialized by name)
+            final var enumSchema = (Schema<T>) ConcurrentSchemaFactory.this.enumSchemasByClass.get(marshallableClass);
+            if (enumSchema != null) {
+                final var enumName = ((Enum) object).name();
+                return new Marshalled<>() {
+                    @Override
+                    public Schema<T> schema() {
+                        return enumSchema;
+                    }
+
+                    @Override
+                    public Streamable<Object> values() {
+                        return Streamable.of(Stream.of(enumName));
+                    }
+                };
+            }
+
             final var schema = (MarshallingSchema<T>) ConcurrentSchemaFactory.this
                 .marshallingSchemasByClass.get(marshallableClass);
 
@@ -677,9 +754,17 @@ public class ConcurrentSchemaFactory
         }
 
         @Override
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "rawtypes"})
         public <T> T unmarshal(final Marshalled<T> marshalled) {
             Objects.requireNonNull(marshalled, "The Marshalled must not be null");
+
+            // Check for explicitly registered enums (deserialized by name via Enum.valueOf)
+            if (ConcurrentSchemaFactory.this.enumSchemasByClass.containsKey(marshalled.schema().owner())) {
+                final var enumName = (String) marshalled.values().stream().findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException(
+                        "No name value present for enum " + marshalled.schema().owner()));
+                return (T) Enum.valueOf((Class<Enum>) marshalled.schema().owner(), enumName);
+            }
 
             // obtain the UnmarshallingSchema for the owner of the Marshalled
             final var schemas = ConcurrentSchemaFactory.this

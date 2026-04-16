@@ -9,7 +9,11 @@ import build.base.marshalling.example.PointWithMarshaller;
 import build.base.marshalling.example.StaticallyRegisteredPoint;
 import build.base.marshalling.example.Wrapper;
 import build.base.marshalling.tutorial.Address;
+import build.base.marshalling.tutorial.Color;
+import build.base.marshalling.tutorial.PersonWithFavoriteColor;
 import org.junit.jupiter.api.Test;
+
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -342,6 +346,113 @@ class MarshallingTests {
         // ensure the Address part of the Person is not the same instance
         assertThat(unmarshalled.address())
             .isNotSameAs(person.address());
+    }
+
+    /**
+     * Ensure an enum {@link Class} can be registered as marshallable and its {@link Schema}s are accessible.
+     */
+    @Test
+    void shouldRegisterEnumAsMarshallable() {
+
+        final var schemaFactory = Marshalling.globalSchemaFactory();
+
+        assertThat(schemaFactory.isMarshallable(Color.class))
+            .isTrue();
+
+        final var marshallingSchema = schemaFactory
+            .getMarshallingSchema(Color.class)
+            .orElseThrow();
+
+        assertThat(marshallingSchema.owner())
+            .isEqualTo(Color.class);
+
+        assertThat(marshallingSchema.parameters().stream().map(Parameter::name))
+            .containsExactly("name");
+
+        assertThat(marshallingSchema.parameters().stream().map(Parameter::type))
+            .containsExactly(String.class);
+
+        final var unmarshallingSchema = schemaFactory
+            .getUnmarshallingSchemas(Color.class)
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(unmarshallingSchema.owner())
+            .isEqualTo(Color.class);
+
+        assertThat(unmarshallingSchema.parameters().stream().map(Parameter::name))
+            .containsExactly("name");
+    }
+
+    /**
+     * Ensure each element of a {@link Stream} of enum values can be marshalled and unmarshalled
+     * directly via the {@link Marshaller} — the scenario that originally exposed this bug.
+     */
+    @Test
+    void shouldMarshalAndUnmarshalStreamOfEnums() {
+
+        final var marshaller = Marshalling.globalSchemaFactory().newMarshaller();
+
+        final var colors = Stream.of(Color.RED, Color.GREEN, Color.BLUE);
+
+        final var roundTripped = colors
+            .map(marshaller::marshal)
+            .map(marshaller::unmarshal)
+            .toList();
+
+        assertThat(roundTripped)
+            .containsExactly(Color.RED, Color.GREEN, Color.BLUE);
+    }
+
+    /**
+     * Ensure a registered enum can be marshalled and unmarshalled directly.
+     */
+    @Test
+    void shouldMarshalAndUnmarshalEnum() {
+
+        final var schemaFactory = Marshalling.globalSchemaFactory();
+
+        final var marshaller = schemaFactory.newMarshaller();
+
+        final var marshalled = marshaller.marshal(Color.BLUE);
+
+        assertThat(marshalled.schema().owner())
+            .isEqualTo(Color.class);
+
+        assertThat(marshalled.values().stream())
+            .containsExactly("BLUE");
+
+        final Color unmarshalled = marshaller.unmarshal(marshalled);
+
+        assertThat(unmarshalled)
+            .isEqualTo(Color.BLUE);
+    }
+
+    /**
+     * Ensure a marshallable {@link Object} containing an enum field can be marshalled and unmarshalled
+     * when the enum is registered via {@link Marshalling#registerEnum(Class)}.
+     */
+    @Test
+    void shouldMarshalAndUnmarshalClassContainingEnum() {
+
+        final var schemaFactory = Marshalling.globalSchemaFactory();
+
+        final var person = new PersonWithFavoriteColor("Ada", "Lovelace", Color.PURPLE);
+
+        final var marshaller = schemaFactory.newMarshaller();
+
+        final var marshalled = marshaller.marshal(person);
+
+        assertThat(marshalled)
+            .isNotNull();
+
+        final PersonWithFavoriteColor unmarshalled = marshaller.unmarshal(marshalled);
+
+        assertThat(unmarshalled)
+            .isNotSameAs(person);
+
+        assertThat(unmarshalled)
+            .isEqualTo(person);
     }
 
     @Test

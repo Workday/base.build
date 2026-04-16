@@ -516,6 +516,29 @@ public class JsonTransportTests {
     }
 
     /**
+     * Ensure a registered {@code enum} can be marshalled and unmarshalled directly via the marshaller,
+     * as required when iterating a {@link java.util.stream.Stream} and marshalling each element.
+     */
+    @Test
+    void shouldMarshalAndUnmarshalRegisteredEnumDirectly() {
+
+        final var marshaller = Marshalling.newMarshaller();
+
+        final var marshalled = marshaller.marshal(Country.Australia);
+
+        assertThat(marshalled.schema().owner())
+            .isEqualTo(Country.class);
+
+        assertThat(marshalled.values().stream())
+            .containsExactly("Australia");
+
+        final Country unmarshalled = marshaller.unmarshal(marshalled);
+
+        assertThat(unmarshalled)
+            .isEqualTo(Country.Australia);
+    }
+
+    /**
      * Ensure {@link Marshal}lable with an {@code enum} can be transported.
      *
      * @throws IOException should an exception occur
@@ -655,7 +678,7 @@ public class JsonTransportTests {
         throws IOException {
 
         final var original = new StreamsAndOptionals(null,
-            Arrays.stream(new String[] { "One", "Two" }),
+            Arrays.stream(new String[]{"One", "Two"}),
             null,
             Optional.of("Optional"));
 
