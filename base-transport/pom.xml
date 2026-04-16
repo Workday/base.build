@@ -20,13 +20,11 @@
         <dependency>
             <groupId>build.base</groupId>
             <artifactId>base-marshalling</artifactId>
-            <version>${revision}</version>
         </dependency>
 
         <dependency>
             <groupId>build.base</groupId>
             <artifactId>base-foundation</artifactId>
-            <version>${revision}</version>
         </dependency>
 
         <!-- Test Dependencies -->
