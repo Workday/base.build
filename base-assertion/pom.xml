@@ -20,38 +20,32 @@
         <dependency>
             <groupId>build.base</groupId>
             <artifactId>base-foundation</artifactId>
-            <version>${revision}</version>
         </dependency>
 
         <dependency>
             <groupId>build.base</groupId>
             <artifactId>base-configuration</artifactId>
-            <version>${revision}</version>
         </dependency>
 
         <dependency>
             <groupId>build.base</groupId>
             <artifactId>base-option</artifactId>
-            <version>${revision}</version>
         </dependency>
 
         <dependency>
             <groupId>build.base</groupId>
             <artifactId>base-retryable</artifactId>
-            <version>${revision}</version>
         </dependency>
 
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
-            <version>${assertj.version}</version>
         </dependency>
 
         <!-- Test Dependencies -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
-            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

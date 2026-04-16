@@ -23,6 +23,6 @@
  * @author reed.vonredwitz
  * @since Apr-2026
  */
-open module build.base.version {
+module build.base.version {
     exports build.base.version;
 }

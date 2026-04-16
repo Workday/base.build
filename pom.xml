@@ -119,6 +119,174 @@
         <module>base-version</module>
     </modules>
 
+    <dependencyManagement>
+        <dependencies>
+            <!-- Intra-project -->
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-archiving</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-assertion</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-commandline</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-configuration</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-expression</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-flow</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-foundation</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-graph</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-io</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-logging</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-marshalling</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-mereology</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-naming</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-network</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-option</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-parsing</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-query</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-retryable</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-table</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-tar</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-telemetry</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-telemetry-ansi</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-telemetry-foundation</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-transport</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-transport-json</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-version</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
+            <!-- Third-party -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${jackson-core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.el</groupId>
+                <artifactId>jakarta.el-api</artifactId>
+                <version>${jakarta-el-api.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>${assertj.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-api</artifactId>
+                <version>${junit.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-params</artifactId>
+                <version>${junit.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-core</artifactId>
+                <version>${mockito.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <build>
         <plugins>
             <plugin>
@@ -126,8 +294,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${maven-compiler-plugin.version}</version>
                 <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
+                    <release>${java.version}</release>
                     <parameters>true</parameters>
                     <testCompilerArgument>-parameters</testCompilerArgument>
                 </configuration>
@@ -335,7 +502,6 @@
                     </execution>
                 </executions>
             </plugin>
-
         </plugins>
     </build>
 
