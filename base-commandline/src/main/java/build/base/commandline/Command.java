@@ -144,6 +144,69 @@ public final class Command {
     }
 
     /**
+     * Registers a named command for display in the help output.
+     * <p>
+     * Commands appear under a {@code Commands:} section in {@code --help}, sorted alphabetically by name.
+     * Registration is purely declarative — it does not affect parsing or validation.
+     *
+     * @param name        the command name as the user would type it (e.g. {@code "compile"})
+     * @param description a short description shown alongside the name in help output
+     * @return this {@link Command}
+     */
+    public Command command(final String name, final String description) {
+        this.registrations.add(parser -> parser.registerCommand(name, description));
+
+        return this;
+    }
+
+    /**
+     * Registers a named category for display in the help output.
+     * <p>
+     * Categories are aggregate aliases that match multiple tasks at once (e.g. {@code "build"} runs
+     * compile, test, and package). They appear under a {@code Categories:} section in {@code --help},
+     * sorted alphabetically by name. Registration is purely declarative — it does not affect parsing.
+     *
+     * @param name        the category name as the user would type it (e.g. {@code "build"})
+     * @param description a short description shown alongside the name in help output
+     * @return this {@link Command}
+     */
+    public Command category(final String name, final String description) {
+        this.registrations.add(parser -> parser.registerCategory(name, description));
+
+        return this;
+    }
+
+    /**
+     * Sets the section heading used for the commands block in help output.
+     * <p>
+     * Defaults to {@code "Commands:"}. Use this to override the heading — for example, a build
+     * tool might prefer {@code "Tasks:"}.
+     *
+     * @param name the section heading
+     * @return this {@link Command}
+     */
+    public Command commandsSectionName(final String name) {
+        this.registrations.add(parser -> parser.setCommandsSectionName(name));
+
+        return this;
+    }
+
+    /**
+     * Sets the section heading used for the categories block in help output.
+     * <p>
+     * Defaults to {@code "Categories:"}. Use this to override the heading — for example, a build
+     * tool might prefer {@code "Aliases:"}.
+     *
+     * @param name the section heading
+     * @return this {@link Command}
+     */
+    public Command categoriesSectionName(final String name) {
+        this.registrations.add(parser -> parser.setCategoriesSectionName(name));
+
+        return this;
+    }
+
+    /**
      * Sets the current help section name for subsequently registered {@link Option}s.
      * <p>
      * All options added after this call appear under the specified heading in the help output,
@@ -206,6 +269,41 @@ public final class Command {
     }
 
     /**
+     * Registers an {@link Option} class with multiple prefixes, a factory method, and an explicit description
+     * for help output.
+     * <p>
+     * All prefixes are registered for parsing and appear together on a single help row. Use this when the
+     * {@link Option} class cannot carry {@link CommandLine.Prefix} or {@link CommandLine.Description} annotations
+     * (e.g. because it lives in a module that does not depend on {@code base-commandline}).
+     *
+     * @param prefixes       the command-line prefixes (e.g. {@code List.of("--working-dir", "-w")})
+     * @param optionClass    the {@link Class} of {@link Option}
+     * @param methodName     the name of the {@code static} factory method
+     * @param description    the description shown in help output
+     * @param parameterTypes the parameter types of the factory method
+     * @return this {@link Command}
+     */
+    public Command option(final List<String> prefixes,
+                          final Class<? extends Option> optionClass,
+                          final String methodName,
+                          final String description,
+                          final Class<?>... parameterTypes) {
+
+        this.registrations.add(parser -> {
+            try {
+                parser.add(prefixes, optionClass, methodName, description, parameterTypes);
+            }
+            catch (final NoSuchMethodException e) {
+                throw new IllegalArgumentException(
+                    "No method [" + methodName + "] with the given parameter types on ["
+                        + optionClass.getName() + "]", e);
+            }
+        });
+
+        return this;
+    }
+
+    /**
      * Registers an environment variable fallback for the specified command-line prefix.
      * <p>
      * When the registered environment variable is set and the option has not been provided on the command line,
@@ -236,6 +334,23 @@ public final class Command {
      */
     public Command envVarResolver(final Function<String, Optional<String>> resolver) {
         this.registrations.add(parser -> parser.setEnvironmentVariableResolver(resolver));
+
+        return this;
+    }
+
+    /**
+     * Sets a {@link Consumer} to receive positional (non-option) arguments — arguments that do not begin with
+     * {@code -} and do not match any registered {@link Option} prefix.
+     * <p>
+     * This is the preferred way to declare first-class positional arguments (e.g. task names) rather than relying
+     * on {@link CommandLineParser#CAPTURE_UNKNOWN_OPTIONS_AS_ARGUMENTS}. Hyphen-prefixed unknowns still fall
+     * through to the {@link CommandLineParser.UnknownOptionConsumer}.
+     *
+     * @param consumer the {@link Consumer} to receive each positional argument value, or {@code null} to clear
+     * @return this {@link Command}
+     */
+    public Command positionalArgument(final Consumer<String> consumer) {
+        this.registrations.add(parser -> parser.setPositionalArgumentConsumer(consumer));
 
         return this;
     }

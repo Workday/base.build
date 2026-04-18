@@ -214,6 +214,20 @@ public class CommandLineParser {
     private final LinkedHashMap<String, LinkedHashSet<Method>> sectionedMethods;
 
     /**
+     * All registered prefixes per {@link Method}, used for help rendering.
+     * <p>
+     * Populated by every call to {@link #add(String, Class, Method)} so that both annotation-driven
+     * and explicit-prefix registrations appear correctly in help output.
+     */
+    private final LinkedHashMap<Method, LinkedHashSet<String>> methodPrefixes;
+
+    /**
+     * Explicitly supplied descriptions per {@link Method}, used for help rendering when no
+     * {@link CommandLine.Description} annotation is present on the method.
+     */
+    private final LinkedHashMap<Method, String> methodDescriptions;
+
+    /**
      * The current help section name applied to subsequently registered {@link Option}s.
      * <p>
      * Defaults to {@code ""} (no section header). Changed via {@link #setHelpSection(String)}.
@@ -272,6 +286,26 @@ public class CommandLineParser {
     private final LinkedHashMap<String, String> envVarMappings;
 
     /**
+     * Registered commands: name to description. Insertion order preserved for help output.
+     */
+    private final LinkedHashMap<String, String> commands;
+
+    /**
+     * Registered categories: name to description. Insertion order preserved for help output.
+     */
+    private final LinkedHashMap<String, String> categories;
+
+    /**
+     * The section heading for the commands block in help output. Defaults to {@code "Commands:"}.
+     */
+    private String commandsSectionName;
+
+    /**
+     * The section heading for the categories block in help output. Defaults to {@code "Categories:"}.
+     */
+    private String categoriesSectionName;
+
+    /**
      * Constructs a {@link CommandLineParser}.
      */
     public CommandLineParser() {
@@ -282,11 +316,17 @@ public class CommandLineParser {
             : y.length() - x.length());
 
         this.sectionedMethods = new LinkedHashMap<>();
+        this.methodPrefixes = new LinkedHashMap<>();
+        this.methodDescriptions = new LinkedHashMap<>();
         this.currentHelpSection = "";
         this.unknownOptionConsumer = Capture.empty();
         this.positionalArgumentConsumer = Capture.empty();
         this.envVarResolver = name -> Optional.ofNullable(System.getenv(name));
         this.envVarMappings = new LinkedHashMap<>();
+        this.commands = new LinkedHashMap<>();
+        this.categories = new LinkedHashMap<>();
+        this.commandsSectionName = "Commands:";
+        this.categoriesSectionName = "Categories:";
     }
 
     /**
@@ -472,6 +512,45 @@ public class CommandLineParser {
     }
 
     /**
+     * Adds the specified {@link Class} of {@link Option} to the {@link CommandLineParser} for multiple prefixes,
+     * with an explicit description for help output.
+     * <p>
+     * All prefixes are registered for parsing and appear together on a single help row. The description
+     * is used in help output when no {@link CommandLine.Description} annotation is present on the method.
+     *
+     * @param prefixes       the {@link Option} prefixes (e.g. {@code List.of("--working-dir", "-w")})
+     * @param optionClass    the {@link Class} of {@link Option}
+     * @param methodName     the name of the {@code static} {@link Method} to create the {@link Option}
+     * @param description    the description shown in help output
+     * @param parameterTypes the types of parameters for the {@link Method}
+     * @return this {@link CommandLineParser} to permit fluent-style method invocation
+     * @throws NoSuchMethodException when the specified {@link Method} can't be located on the {@link Class}
+     */
+    public CommandLineParser add(final List<String> prefixes,
+                                 final Class<? extends Option> optionClass,
+                                 final String methodName,
+                                 final String description,
+                                 final Class<?>... parameterTypes)
+        throws NoSuchMethodException {
+
+        Objects.requireNonNull(prefixes, "The prefixes must not be null");
+        Objects.requireNonNull(optionClass, "The class of option must not be null");
+        Objects.requireNonNull(methodName, "The method name must not be null");
+
+        final var method = optionClass.getMethod(methodName, parameterTypes);
+
+        for (final String prefix : prefixes) {
+            add(prefix, optionClass, method);
+        }
+
+        if (description != null && !description.isBlank()) {
+            this.methodDescriptions.put(method, description);
+        }
+
+        return this;
+    }
+
+    /**
      * Adds the specified {@link Class} of {@link Option} to the {@link CommandLineParser} for the provided prefix.
      * <p>
      * Unlike {@link #add(Class)}, the specified {@link Option} {@link Class} does not need a {@link Method} to be
@@ -501,6 +580,9 @@ public class CommandLineParser {
             this.sectionedMethods
                 .computeIfAbsent(this.currentHelpSection, k -> new LinkedHashSet<>())
                 .add(method);
+            this.methodPrefixes
+                .computeIfAbsent(method, k -> new LinkedHashSet<>())
+                .add(prefix);
             this.prefixMethods.compute(prefix, (__, methods) -> {
                 if (methods == null) {
                     return new HashSet<>();
@@ -561,6 +643,69 @@ public class CommandLineParser {
     }
 
     /**
+     * Registers a named command for display in the help output.
+     * <p>
+     * Commands are purely declarative — registration does not affect parsing. They appear under a
+     * {@code Commands:} section in help, sorted alphabetically by name.
+     *
+     * @param name        the command name as the user would type it (e.g. {@code "compile"})
+     * @param description a short description shown alongside the name in help output
+     * @return this {@link CommandLineParser} to permit fluent-style method invocation
+     */
+    public CommandLineParser registerCommand(final String name, final String description) {
+        Objects.requireNonNull(name, "The command name must not be null");
+        Objects.requireNonNull(description, "The command description must not be null");
+
+        this.commands.put(name, description);
+
+        return this;
+    }
+
+    /**
+     * Registers a named category for display in the help output.
+     * <p>
+     * Categories are aggregate aliases that match multiple tasks at once (e.g. {@code "build"} runs
+     * compile, test, and package). Registration is purely declarative and does not affect parsing.
+     * They appear under a {@code Categories:} section in help, sorted alphabetically by name.
+     *
+     * @param name        the category name as the user would type it (e.g. {@code "build"})
+     * @param description a short description shown alongside the name in help output
+     * @return this {@link CommandLineParser} to permit fluent-style method invocation
+     */
+    public CommandLineParser registerCategory(final String name, final String description) {
+        Objects.requireNonNull(name, "The category name must not be null");
+        Objects.requireNonNull(description, "The category description must not be null");
+
+        this.categories.put(name, description);
+
+        return this;
+    }
+
+    /**
+     * Sets the section heading used for the commands block in help output.
+     *
+     * @param name the section heading (e.g. {@code "Tasks:"})
+     * @return this {@link CommandLineParser} to permit fluent-style method invocation
+     */
+    public CommandLineParser setCommandsSectionName(final String name) {
+        this.commandsSectionName = Objects.requireNonNull(name, "The commands section name must not be null");
+
+        return this;
+    }
+
+    /**
+     * Sets the section heading used for the categories block in help output.
+     *
+     * @param name the section heading (e.g. {@code "Aliases:"})
+     * @return this {@link CommandLineParser} to permit fluent-style method invocation
+     */
+    public CommandLineParser setCategoriesSectionName(final String name) {
+        this.categoriesSectionName = Objects.requireNonNull(name, "The categories section name must not be null");
+
+        return this;
+    }
+
+    /**
      * Scans the registered option classes and constructs and throws a {@link HelpException} using reflection on
      * {@link CommandLine} annotations.
      */
@@ -577,6 +722,32 @@ public class CommandLineParser {
                 usageLine.append(" ").append(this.helpUsageArguments);
             }
             helpTable.addRow(usageLine.toString());
+        }
+
+        if (!this.commands.isEmpty()) {
+            helpTable.addRow(this.commandsSectionName);
+
+            final var commandsTable = Table.create();
+            commandsTable.options().add(CellSeparator.of("    "));
+            this.commands.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> commandsTable.addRow(Cell.of(entry.getKey()), Cell.of(entry.getValue())));
+
+            helpTable.addRow(commandsTable.toString());
+            helpTable.addRow("");
+        }
+
+        if (!this.categories.isEmpty()) {
+            helpTable.addRow(this.categoriesSectionName);
+
+            final var categoriesTable = Table.create();
+            categoriesTable.options().add(CellSeparator.of("    "));
+            this.categories.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> categoriesTable.addRow(Cell.of(entry.getKey()), Cell.of(entry.getValue())));
+
+            helpTable.addRow(categoriesTable.toString());
+            helpTable.addRow("");
         }
 
         helpTable.addRow("Options:");
@@ -601,20 +772,19 @@ public class CommandLineParser {
 
                 // add the prefixes to the option table
                 optionTable.addRow(String.join(", ",
-                    Arrays.stream(method.getAnnotationsByType(CommandLine.Prefix.class))
-                        .map(CommandLine.Prefix::value)
+                    Optional.ofNullable(this.methodPrefixes.get(method))
+                        .orElseGet(LinkedHashSet::new)
+                        .stream()
                         .collect(Collectors.toCollection(() -> new TreeSet<>(PREFIX_COMPARATOR)))));
 
-                // create a new table for the class/description
+                // create a new table for the description
                 final var infoTable = Table.create();
                 infoTable.options().add(CellSeparator.of("    "));
 
-                // add the option class as a new row
-                infoTable.addRow(Cell.create(), Cell.of("(" + method.getDeclaringClass().getName() + ")"));
-
-                // add the description if it exists
+                // add the description if it exists (annotation takes precedence over explicit)
                 Optional.ofNullable(method.getAnnotation(CommandLine.Description.class))
                     .map(CommandLine.Description::value)
+                    .or(() -> Optional.ofNullable(this.methodDescriptions.get(method)))
                     .ifPresent(description -> infoTable.addRow(Cell.create(), Cell.of(description)));
 
                 // add the info table to the optionTable
