@@ -644,6 +644,141 @@ class CommandLineParserTests {
     }
 
     /**
+     * Ensure {@link CommandLineParser#add(java.util.List, Class, String, String, Class[])} registers all provided
+     * prefixes so the option can be parsed via any of them.
+     */
+    @Test
+    void shouldRegisterAllExplicitPrefixes()
+        throws NoSuchMethodException {
+
+        final var parser = new CommandLineParser()
+            .add(List.of("--zero", "-z"), ZeroArgumentOption.class, "autodetect", null);
+
+        assertThat(parser.parse("--zero").build().get(ZeroArgumentOption.class)).isNotNull();
+        assertThat(parser.parse("-z").build().get(ZeroArgumentOption.class)).isNotNull();
+    }
+
+    /**
+     * Ensure an explicit description supplied to
+     * {@link CommandLineParser#add(java.util.List, Class, String, String, Class[])} appears in help output
+     * when the factory method carries no {@link CommandLine.Description} annotation.
+     */
+    @Test
+    void shouldUseExplicitDescriptionInHelpWhenNoAnnotation()
+        throws NoSuchMethodException {
+
+        final List<String> helpOutput = new ArrayList<>();
+
+        new CommandLineParser()
+            .setHelpHandler(helpOutput::add)
+            .add(List.of("--zero"), ZeroArgumentOption.class, "autodetect", "An explicit description");
+
+        // ZeroArgumentOption has no @Description — the explicit one must appear
+        // Trigger help
+        new CommandLineParser()
+            .setHelpHandler(helpOutput::add)
+            .add(List.of("--zero"), ZeroArgumentOption.class, "autodetect", "An explicit description")
+            .parse("--help");
+
+        assertThat(helpOutput).hasSize(1);
+        assertThat(helpOutput.getFirst()).contains("An explicit description");
+    }
+
+    /**
+     * Ensure a {@link CommandLine.Description} annotation takes precedence over an explicit description
+     * passed to {@link CommandLineParser#add(java.util.List, Class, String, String, Class[])}.
+     */
+    @Test
+    void shouldPreferAnnotationDescriptionOverExplicitDescription()
+        throws NoSuchMethodException {
+
+        final List<String> helpOutput = new ArrayList<>();
+
+        new CommandLineParser()
+            .setHelpHandler(helpOutput::add)
+            .add(List.of("--add"), TwoArgumentOption.class, "of", "Explicit ignored", int.class, int.class)
+            .parse("--help");
+
+        assertThat(helpOutput).hasSize(1);
+        assertThat(helpOutput.getFirst()).contains("Adds two ints");
+        assertThat(helpOutput.getFirst()).doesNotContain("Explicit ignored");
+    }
+
+    /**
+     * Ensure {@link CommandLineParser#registerCommand(String, String)} and
+     * {@link CommandLineParser#registerCategory(String, String)} cause their entries to appear under
+     * {@code Commands:} and {@code Categories:} sections in help output.
+     */
+    @Test
+    void shouldRenderCommandsAndCategoriesInHelp() {
+        final List<String> helpOutput = new ArrayList<>();
+
+        new CommandLineParser()
+            .setHelpHandler(helpOutput::add)
+            .add(ZeroArgumentOption.class)
+            .registerCommand("compile", "Compiles sources")
+            .registerCommand("test", "Runs tests")
+            .registerCategory("build", "Runs compile + test")
+            .parse("--help");
+
+        assertThat(helpOutput).hasSize(1);
+        final var help = helpOutput.getFirst();
+        assertThat(help).contains("Commands:");
+        assertThat(help).contains("compile");
+        assertThat(help).contains("Compiles sources");
+        assertThat(help).contains("Categories:");
+        assertThat(help).contains("build");
+        assertThat(help).contains("Runs compile + test");
+    }
+
+    /**
+     * Ensure {@link CommandLineParser#setCommandsSectionName(String)} and
+     * {@link CommandLineParser#setCategoriesSectionName(String)} replace the default headings in help output.
+     */
+    @Test
+    void shouldUseCustomSectionNamesForCommandsAndCategories() {
+        final List<String> helpOutput = new ArrayList<>();
+
+        new CommandLineParser()
+            .setHelpHandler(helpOutput::add)
+            .add(ZeroArgumentOption.class)
+            .registerCommand("compile", "Compiles sources")
+            .registerCategory("build", "Runs everything")
+            .setCommandsSectionName("Tasks:")
+            .setCategoriesSectionName("Aliases:")
+            .parse("--help");
+
+        assertThat(helpOutput).hasSize(1);
+        final var help = helpOutput.getFirst();
+        assertThat(help).contains("Tasks:");
+        assertThat(help).doesNotContain("Commands:");
+        assertThat(help).contains("Aliases:");
+        assertThat(help).doesNotContain("Categories:");
+    }
+
+    /**
+     * Ensure commands and categories are sorted alphabetically in help output regardless of registration order.
+     */
+    @Test
+    void shouldSortCommandsAndCategoriesAlphabeticallyInHelp() {
+        final List<String> helpOutput = new ArrayList<>();
+
+        new CommandLineParser()
+            .setHelpHandler(helpOutput::add)
+            .add(ZeroArgumentOption.class)
+            .registerCommand("zebra", "Z task")
+            .registerCommand("alpha", "A task")
+            .registerCategory("zoo", "Z cat")
+            .registerCategory("ant", "A cat")
+            .parse("--help");
+
+        assertThat(helpOutput).hasSize(1);
+        final var help = helpOutput.getFirst();
+        assertThat(help).containsSubsequence("alpha", "zebra");
+        assertThat(help).containsSubsequence("ant", "zoo");
+    }
+
+    /**
      * Ensure {@link CommandLineParser#setPositionalArgumentConsumer(java.util.function.Consumer)} receives
      * non-hyphen-prefixed arguments.
      */
