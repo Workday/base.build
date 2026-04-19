@@ -1,0 +1,12 @@
+package build.base.template.test;
+
+import java.util.List;
+
+template HtmlOut TasksTemplate(String title, List<String> items) {
+<h1>#{title}</h1>
+<ul>
+@for (var item : items) {
+  <li>#{item}</li>
+@}
+</ul>
+}

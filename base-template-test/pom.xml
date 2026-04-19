@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>build.base</groupId>
+        <artifactId>base-project</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>base-template-test</artifactId>
+
+    <name>base.build Template Integration Tests</name>
+    <description>Integration tests for base-template-processor — verifies that .jt files are compiled to working Java records.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>build.base</groupId>
+            <artifactId>base-template</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>build.base</groupId>
+            <artifactId>base-template-processor</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <generatedSourcesDirectory>${project.build.directory}/generated-sources/jt</generatedSourcesDirectory>
+                    <!-- Maven compiler plugin does not auto-route JPMS processor modules to processor-module-path.
+                         Required until tooling (spin.build) handles this automatically. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>build.base</groupId>
+                            <artifactId>base-template-processor</artifactId>
+                            <version>${revision}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <configuration>
+                    <ignoredUnusedDeclaredDependencies>
+                        <ignoredUnusedDeclaredDependency>build.base:base-template-processor</ignoredUnusedDeclaredDependency>
+                    </ignoredUnusedDeclaredDependencies>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
