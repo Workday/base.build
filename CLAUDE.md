@@ -27,4 +27,3 @@ For detailed architecture, see [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md).
 - Configuration: use `ConfigurationBuilder.add(option).build()` → `config.get(MyOption.class)`.
 - Marshalling: annotate with `@Marshal` / `@Unmarshal`; call `Marshalling.register(Class, lookup())` in static initializer.
 - Retryable: throw `EphemeralFailureException` (retry) or `PermanentFailureException` (stop).
-- All JPMS `module-info.java` files are `open` modules to allow marshalling/reflection.

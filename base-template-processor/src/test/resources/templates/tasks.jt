@@ -1,0 +1,17 @@
+package build.base.template.processor.generated;
+
+import java.util.List;
+
+template HtmlOut TasksTemplate(String title, List<String> items) {
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>#{title}</h1>
+  <ul>
+@for (var item : items) {
+    <li>#{item}</li>
+@}
+  </ul>
+</body>
+</html>
+}

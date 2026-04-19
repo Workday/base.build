@@ -114,6 +114,9 @@
         <module>base-telemetry</module>
         <module>base-telemetry-ansi</module>
         <module>base-telemetry-foundation</module>
+        <module>base-template</module>
+        <module>base-template-processor</module>
+        <module>base-template-test</module>
         <module>base-transport</module>
         <module>base-transport-json</module>
         <module>base-version</module>
@@ -235,6 +238,16 @@
             <dependency>
                 <groupId>build.base</groupId>
                 <artifactId>base-telemetry-foundation</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-template</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-template-processor</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
@@ -537,6 +550,7 @@
                         <configuration>
                             <publishingServerId>central</publishingServerId>
                             <autoPublish>true</autoPublish>
+                            <excludeArtifacts>base-template-test</excludeArtifacts>
                         </configuration>
                     </plugin>
                 </plugins>

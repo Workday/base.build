@@ -1,0 +1,5 @@
+package build.base.template.test;
+
+template HtmlOut ItemTemplate(String label, boolean active) {
+<li class="item#{active ? " active" : ""}">#{label}</li>
+}

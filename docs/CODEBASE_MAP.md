@@ -53,6 +53,11 @@ graph TB
         TELA[base-telemetry-ansi]
     end
 
+    subgraph "Template"
+        TMPL[base-template]
+        TMPLP[base-template-processor]
+    end
+
     subgraph "Utilities"
         TABLE[base-table]
         NAME[base-naming]
@@ -88,6 +93,8 @@ graph TB
     TAR --> ARCH
     TEL --> TELF
     TELF --> TELA
+    TMPLP --> TMPL
+    TMPLP --> PARSE
     RETRY --> ASSERT
     PARSE --> EXPR
 ```
@@ -127,6 +134,9 @@ base/
 ├── base-telemetry/           # Telemetry type hierarchy API (no implementation)
 ├── base-telemetry-ansi/      # ANSI terminal telemetry recorder with progress bars
 ├── base-telemetry-foundation/# Abstract + concrete TelemetryRecorder impls
+├── base-template/            # Runtime: Template<O>, HtmlOut (escaping), TextOut, @ProcessTemplates
+├── base-template-processor/  # APT: compiles .jt template files into Java records at build time
+├── base-template-test/       # Integration tests for base-template-processor (not published)
 ├── base-transport/           # Transport abstraction + Transformer adapters
 ├── base-transport-json/      # Jackson-based JSON transport + codecs
 ├── base-version/             # Version parsing, comparison, ranges, constraints
@@ -558,6 +568,77 @@ Optional<Path<String>> path = Graphs.shortestPath(g, "A", "C");
 - `WeightedGraph`: if multiple edges are added between the same pair, the last weight wins silently.
 
 **Dependencies:** None (production). JUnit 5 + AssertJ (test only).
+
+---
+
+### base-template
+
+**Purpose:** JPMS-native compile-time template library. Templates are authored as `.jt` files and compiled to Java records by `base-template-processor` at build time. `HtmlOut` HTML-escapes all `write()` calls; `TextOut` passes values through verbatim.
+
+| Type | Role |
+|---|---|
+| `Template<O extends Out>` | `@FunctionalInterface`; one method: `render(O out)` |
+| `Out` | Abstract output sink; `raw(String)` writes unescaped; buffers to `StringBuilder` or streams to `Writer` |
+| `HtmlOut` | Extends `Out`; `write(Object)` HTML-escapes `& < > " '` — safe for user-supplied values in HTML |
+| `TextOut` | Extends `Out`; `write(Object)` writes `String.valueOf(value)` unescaped — for plain-text output |
+| `@ProcessTemplates` | Module-level annotation; marks a module as containing `.jt` files; `RetentionPolicy.SOURCE` |
+
+**Template syntax (`.jt` files):**
+```
+package com.example;
+import java.util.List;
+
+template HtmlOut TasksTemplate(String title, List<String> items) {
+<h1>#{title}</h1>
+<ul>
+@for (var item : items) {
+  <li>#{item}</li>
+@}
+</ul>
+}
+```
+- `#{expr}` — interpolated expression; calls `out.write(expr)`
+- `@<statement>` — raw Java code line emitted into `render()`
+- `@include <expr>` — calls `<expr>.render(out)` for sub-template composition
+- `package` / `import` / `import static` / `import static ... .*` all supported in header
+
+**Usage:**
+```java
+var out = new HtmlOut();
+new TasksTemplate("My Tasks", List.of("Buy milk", "Walk dog")).render(out);
+String html = out.toString();
+```
+
+**Dependencies:** None (runtime). `base-parsing` (processor compile-time only).
+
+---
+
+### base-template-processor
+
+**Purpose:** Annotation processor that walks `src/main/jt/` and compiles each `.jt` file into a Java record implementing `Template<O>`. Activated by `@ProcessTemplates` on the consuming module's `module-info.java`.
+
+| Type | Role |
+|---|---|
+| `TemplateProcessor` | `AbstractProcessor`; triggers on `@ProcessTemplates`; walks `src/main/jt/` |
+| `JtParser` | Parses header (package, imports, template declaration) and body (text, `#{expr}`, `@code`, `@include`) |
+| `CodeGenerator` | Emits the Java record source; merges adjacent `RawText` nodes; escapes Java string literals |
+| `ParsedTemplate` | Record holding package, imports, outType, className, params, and `List<BodyNode>` |
+| `BodyNode` (sealed) | `RawText`, `Expression`, `CodeLine`, `Include` |
+
+**Source root:** defaults to `<classOutput>/../../src/main/jt`; override with `-Ajt.sourceDir=<path>` for non-standard layouts.
+
+**Maven setup:**
+```xml
+<annotationProcessorPaths>
+    <path>
+        <groupId>build.base</groupId>
+        <artifactId>base-template-processor</artifactId>
+        <version>${revision}</version>
+    </path>
+</annotationProcessorPaths>
+```
+
+**Dependencies:** `base-parsing`, `java.compiler`.
 
 ---
 
@@ -1008,6 +1089,13 @@ List<String> order = Graphs.topologicalSort(g);     // [sources, compile, test]
 List<Set<String>> layers = Graphs.parallelizableGroups(g); // concurrent execution layers
 Optional<List<String>> cycle = Graphs.findCycle(g); // empty if DAG
 ```
+
+**To write a compile-time template:**
+- Create a `.jt` file under `src/main/jt/<package>/MyTemplate.jt`
+- Annotate `module-info.java` with `@build.base.template.ProcessTemplates`
+- Add `base-template` as a runtime dependency and `base-template-processor` to `annotationProcessorPaths`
+- Use `#{expr}` for interpolation, `@for`/`@if`/`@}` for control flow, `@include expr` for composition
+- Choose `HtmlOut` for HTML output (auto-escapes user values) or `TextOut` for plain text
 
 **To parse and compare versions:**
 ```java
