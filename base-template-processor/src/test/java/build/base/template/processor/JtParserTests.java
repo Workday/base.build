@@ -16,7 +16,7 @@ class JtParserTests {
             "",
             "template HtmlOut HelloTemplate(String name) {",
             "<h1>Hello</h1>",
-            "}"
+            "@end"
         );
         final var result = JtParser.parse(lines, "hello.jt");
 
@@ -35,7 +35,7 @@ class JtParserTests {
             "import com.example.Task;",
             "",
             "template HtmlOut TasksTemplate(List<Task> tasks) {",
-            "}");
+            "@end");
         final var result = JtParser.parse(lines, "tasks.jt");
 
         assertThat(result.imports()).containsExactly("import java.util.List", "import com.example.Task");
@@ -94,7 +94,7 @@ class JtParserTests {
             "@for (var item : items) {",
             "<li>#{item}</li>",
             "@}",
-            "}"
+            "@end"
         );
         final var result = JtParser.parse(lines, "t.jt");
         assertThat(result.body()).contains(new BodyNode.CodeLine("for (var item : items) {"));
@@ -107,7 +107,7 @@ class JtParserTests {
             "package com.example;",
             "template HtmlOut T(Object item) {",
             "@include new ItemTemplate(item)",
-            "}"
+            "@end"
         );
         final var result = JtParser.parse(lines, "t.jt");
         assertThat(result.body()).contains(new BodyNode.Include("new ItemTemplate(item)"));
@@ -119,7 +119,7 @@ class JtParserTests {
             "package com.example;",
             "import java.util.*;",
             "template HtmlOut T() {",
-            "}"
+            "@end"
         );
         final var result = JtParser.parse(lines, "t.jt");
         assertThat(result.imports()).containsExactly("import java.util.*");
@@ -131,7 +131,7 @@ class JtParserTests {
             "package com.example;",
             "import static java.util.List.of;",
             "template HtmlOut T() {",
-            "}"
+            "@end"
         );
         final var result = JtParser.parse(lines, "t.jt");
         assertThat(result.imports()).containsExactly("import static java.util.List.of");
@@ -143,10 +143,36 @@ class JtParserTests {
             "package com.example;",
             "import static java.util.Collections.*;",
             "template HtmlOut T() {",
-            "}"
+            "@end"
         );
         final var result = JtParser.parse(lines, "t.jt");
         assertThat(result.imports()).containsExactly("import static java.util.Collections.*");
+    }
+
+    @Test
+    void shouldPreserveBareClosingBraceInBody() {
+        final var lines = List.of(
+            "package com.example;",
+            "template HtmlOut T() {",
+            "<style>",
+            "body {",
+            "    color: red;",
+            "}",
+            "</style>",
+            "<script>",
+            "function x() {",
+            "    return 1;",
+            "}",
+            "</script>",
+            "@end"
+        );
+        final var result = JtParser.parse(lines, "t.jt");
+
+        assertThat(result.body()).contains(
+            new BodyNode.RawText("body {\n"),
+            new BodyNode.RawText("}\n"),
+            new BodyNode.RawText("function x() {\n"),
+            new BodyNode.RawText("</script>\n"));
     }
 
     @Test
