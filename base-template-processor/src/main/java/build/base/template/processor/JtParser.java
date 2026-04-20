@@ -54,7 +54,9 @@ final class JtParser {
                 if (trimmed.startsWith("template ")) {
                     inBody = true;
                 }
-            } else if (!trimmed.equals("}")) {
+            } else if (trimmed.equals("@end")) {
+                break;
+            } else {
                 bodyLines.add(line);
             }
         }

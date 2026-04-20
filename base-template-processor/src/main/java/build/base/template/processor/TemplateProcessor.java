@@ -106,9 +106,17 @@ public final class TemplateProcessor extends AbstractProcessor {
             final URI uri = probe.toUri();
             probe.delete();
 
-            // From target/classes → project root → src/main/jt
-            final Path classOutput = Path.of(uri).getParent();
-            return classOutput.getParent().getParent().resolve("src/main/jt");
+            // Walk up from the class output directory until we find a parent that contains src/main/jt.
+            // This handles both Maven (target/classes) and spin (.build/main/target) layouts.
+            Path dir = Path.of(uri).getParent();
+            while (dir != null) {
+                final Path candidate = dir.resolve("src/main/jt");
+                if (Files.isDirectory(candidate)) {
+                    return candidate;
+                }
+                dir = dir.getParent();
+            }
+            return null;
         } catch (final IOException e) {
             return null;
         }

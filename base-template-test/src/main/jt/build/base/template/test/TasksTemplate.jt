@@ -9,4 +9,4 @@ template HtmlOut TasksTemplate(String title, List<String> items) {
   <li>#{item}</li>
 @}
 </ul>
-}
+@end
