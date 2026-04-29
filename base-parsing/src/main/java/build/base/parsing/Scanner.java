@@ -24,11 +24,11 @@ import build.base.foundation.stream.Streamable;
 import build.base.io.LookaheadReader;
 
 import java.io.Reader;
-import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.IntPredicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -62,12 +62,12 @@ public class Scanner
     implements AutoCloseable {
 
     /**
-     * The {@link LookaheadReader} from which content will be read for parsing.
+     * The {@link ScannerInput} from which content will be read for parsing.
      */
-    private final LookaheadReader reader;
+    private final ScannerInput input;
 
     /**
-     * The {@link Filter}s for skipping {@link LookaheadReader} content to ignore and not parse.
+     * The {@link Filter}s for skipping {@link ScannerInput} content to ignore and not parse.
      */
     private final ArrayList<Filter> filters;
 
@@ -84,7 +84,7 @@ public class Scanner
     public Scanner(final Reader reader) {
         Objects.requireNonNull(reader, "The Reader must not be null");
 
-        this.reader = reader instanceof LookaheadReader ? (LookaheadReader) reader : new LookaheadReader(reader);
+        this.input = new LookaheadReaderInput(reader);
         this.filters = new ArrayList<>();
         this.evaluators = new HashMap<>();
     }
@@ -95,13 +95,17 @@ public class Scanner
      * @param string the {@link String}
      */
     public Scanner(final String string) {
-        this(new StringReader(string));
+        Objects.requireNonNull(string, "The String must not be null");
+
+        this.input = new StringInput(string);
+        this.filters = new ArrayList<>();
+        this.evaluators = new HashMap<>();
     }
 
     @Override
     public void close()
         throws Exception {
-        this.reader.close();
+        this.input.close();
     }
 
     /**
@@ -138,25 +142,51 @@ public class Scanner
      * @return the {@link LookaheadReader.Location}
      */
     public LookaheadReader.Location getLocation() {
-        return this.reader.getLocation();
+        return this.input.getLocation();
     }
 
     /**
-     * Normalizes a {@link Pattern} for matching with the {@link String}.
+     * Returns {@code true} if this {@link Scanner} supports backtracking via {@link #save()} and
+     * {@link #restore(int)}.
+     *
+     * @return {@code true} if backtracking is supported
+     */
+    public boolean supportsBacktracking() {
+        return this.input.supportsBacktracking();
+    }
+
+    /**
+     * Saves the current scanner position and returns a checkpoint.
+     *
+     * @return an opaque checkpoint value
+     * @throws UnsupportedOperationException if backtracking is not supported
+     */
+    public int save() {
+        return this.input.save();
+    }
+
+    /**
+     * Restores the scanner to the position recorded by {@link #save()}.
+     *
+     * @param checkpoint a value previously returned by {@link #save()}
+     * @throws UnsupportedOperationException if backtracking is not supported
+     */
+    public void restore(final int checkpoint) {
+        this.input.restore(checkpoint);
+    }
+
+    /**
+     * Normalizes a {@link Pattern} for matching at the current position in the input.
      * <p>
-     * By default, all {@link Pattern}s are designed to match anywhere in a {@link String}, unless they are explicitly
-     * bounded, say to commence matching at the start (^) or end ($) of a {@link String}.  When using a {@link Pattern}
-     * for parsing, we need to take this into account, namely if a specified {@link Pattern} is bounded to commence
-     * matching at the start of a {@link String}, the current position in the {@link String} being parsed
-     * <strong>must be</strong> at the start of the said {@link String}.  Similarly, if the {@link Pattern} is not
-     * bound to commence matching at the start of a {@link String}, we must automatically include the bound to
-     * commence matching at the start of a {@link String}, because we must match from the <i>start of the current
-     * position</i> in the {@link String}.
+     * If the provided {@link Pattern} does not start with {@code ^}, one is prepended so that matching is
+     * anchored to the current scanner position.
      * <p>
-     * This method performs this transformation, if necessary, to return a {@link Pattern} that is suitable for
-     * matching at the current position in the {@link String}.  Should it not be possible to produce a
-     * normalized {@link Pattern} or it is determined that the provided {@link Pattern} would never match, an
-     * {@link Optional#empty()} is returned.
+     * A leading {@code ^} in the caller's pattern is treated as a line-start assertion: the pattern will only
+     * match when the scanner is at column 1 (the start of a line). To match from the current position regardless
+     * of column, omit the {@code ^} — the scanner adds it automatically.
+     * <p>
+     * Returns {@link Optional#empty()} when {@code pattern} is {@code null} or when a line-anchored pattern
+     * is used outside column 1.
      *
      * @param pattern the {@link Pattern}
      * @return the {@link Optional}ly normalized {@link Pattern}
@@ -166,10 +196,9 @@ public class Scanner
             return Optional.empty();
         }
 
-        // normalize the pattern
         final String regex = pattern.pattern();
 
-        if (regex.startsWith("^") && this.reader.getLocation().getColumn() != 1) {
+        if (regex.startsWith("^") && this.input.getLocation().getColumn() != 1) {
             return Optional.empty();
         }
 
@@ -187,18 +216,18 @@ public class Scanner
      * @return the {@link Optional}ly matched {@link String} or {@link Optional#empty()} if the match was unsuccessful
      */
     private Optional<String> match(final Pattern pattern) {
-        if (pattern != null && this.reader.available()) {
+        if (pattern != null && this.input.available()) {
             final Optional<Pattern> normalized = normalize(pattern);
 
             if (normalized.isPresent()) {
-                final Matcher matcher = normalized.get().matcher(this.reader.peekMaximum());
+                final Matcher matcher = normalized.get().matcher(this.input.peekMaximum());
 
                 if (matcher.find()) {
                     // obtain the match
                     final String match = matcher.group();
 
                     // skip the matched length
-                    this.reader.consume(match.length());
+                    this.input.consume(match.length());
 
                     return Optional.of(match);
                 }
@@ -217,11 +246,11 @@ public class Scanner
      * @return the {@link Optional}ly matched {@link String} or {@link Optional#empty()} if the match was unsuccessful
      */
     private Optional<String> match(final String string) {
-        if (string != null && !string.isEmpty() && this.reader.available()) {
-            if (this.reader.peek(string.length()).equals(string)) {
+        if (string != null && !string.isEmpty() && this.input.available()) {
+            if (this.input.peek(string.length()).equals(string)) {
 
                 // move the column past the match
-                this.reader.consume(string.length());
+                this.input.consume(string.length());
 
                 return Optional.of(string);
             }
@@ -240,15 +269,15 @@ public class Scanner
         if (!this.filters.isEmpty()) {
             int index = 0;
 
-            while (this.reader.available() && index < this.filters.size()) {
+            while (this.input.available() && index < this.filters.size()) {
 
                 final Filter filter = this.filters.get(index);
-                final LookaheadReader.Location location = this.reader.getLocation();
+                final LookaheadReader.Location location = this.input.getLocation();
 
-                filter.accept(this.reader);
+                filter.accept(this.input);
 
                 // did the filter consume any content?
-                if (location.equals(this.reader.getLocation())) {
+                if (location.equals(this.input.getLocation())) {
                     // the location wasn't changed, so we can proceed to the next filter
                     index++;
                 } else {
@@ -258,7 +287,7 @@ public class Scanner
             }
         }
 
-        return this.reader.available();
+        return this.input.available();
     }
 
     /**
@@ -316,7 +345,7 @@ public class Scanner
      */
     public String consume(final int count)
         throws ParseException {
-        final String consumed = this.reader.consume(count);
+        final String consumed = this.input.consume(count);
 
         if (consumed.length() != count) {
             throw new ParseException(getLocation(),
@@ -342,9 +371,9 @@ public class Scanner
             final Optional<String> match = match(pattern);
 
             return match.orElseThrow(
-                () -> new ParseException(this.reader.getLocation(), pattern.toString(), this.reader.peekMaximum()));
+                () -> new ParseException(this.input.getLocation(), pattern.toString(), this.input.peekMaximum()));
         } else {
-            throw new ParseException(this.reader.getLocation(), pattern.toString(), "(end of input)");
+            throw new ParseException(this.input.getLocation(), pattern.toString(), "(end of input)");
         }
     }
 
@@ -363,9 +392,9 @@ public class Scanner
             final Optional<String> match = match(string);
 
             return match.orElseThrow(
-                () -> new ParseException(this.reader.getLocation(), string, this.reader.peekMaximum()));
+                () -> new ParseException(this.input.getLocation(), string, this.input.peekMaximum()));
         } else {
-            throw new ParseException(this.reader.getLocation(), string, "(end of input)");
+            throw new ParseException(this.input.getLocation(), string, "(end of input)");
         }
     }
 
@@ -391,7 +420,7 @@ public class Scanner
                 try {
                     return evaluator.apply(this);
                 } catch (final ParseException e) {
-                    throw new ParseException(getLocation(), evaluator.getDescription(), this.reader.peekMaximum());
+                    throw new ParseException(getLocation(), evaluator.getDescription(), this.input.peekMaximum());
                 } catch (final Exception e) {
                     throw new ParseException(
                         getLocation(),
@@ -401,12 +430,12 @@ public class Scanner
                 }
             } else {
                 throw new ParseException(
-                    this.reader.getLocation(),
+                    this.input.getLocation(),
                     evaluator.getDescription(),
-                    this.reader.peekMaximum());
+                    this.input.peekMaximum());
             }
         } else {
-            throw new ParseException(this.reader.getLocation(), evaluator.getDescription(), "(end of input)");
+            throw new ParseException(this.input.getLocation(), evaluator.getDescription(), "(end of input)");
         }
     }
 
@@ -429,9 +458,9 @@ public class Scanner
         }
 
         throw new ParseException(
-            this.reader.getLocation(),
+            this.input.getLocation(),
             "Unable to determine Evaluator for " + valueClass,
-            this.reader.peekMaximum());
+            this.input.peekMaximum());
     }
 
     /**
@@ -443,7 +472,7 @@ public class Scanner
     public boolean follows(final Pattern pattern) {
         final Optional<Pattern> normalized = normalize(pattern);
 
-        return normalized.isPresent() && available() && normalized.get().matcher(this.reader.peekMaximum()).find();
+        return normalized.isPresent() && available() && normalized.get().matcher(this.input.peekMaximum()).find();
     }
 
     /**
@@ -455,7 +484,7 @@ public class Scanner
      * @return {@code true} if the pattern matches, {@code false} otherwise
      */
     public boolean follows(final String string) {
-        return string != null && available() && this.reader.follows(string);
+        return string != null && available() && this.input.follows(string);
     }
 
     /**
@@ -535,7 +564,7 @@ public class Scanner
      */
     public void skipUntil(final Pattern pattern) {
         while (available() && !follows(pattern)) {
-            this.reader.consume();
+            this.input.consume();
         }
     }
 
@@ -550,7 +579,7 @@ public class Scanner
      */
     public void skipUntil(final String string) {
         while (available() && !follows(string)) {
-            this.reader.consume();
+            this.input.consume();
         }
     }
 
@@ -563,7 +592,7 @@ public class Scanner
      */
     public void skipUntil(final Evaluator<?> evaluator) {
         while (available() && !follows(evaluator)) {
-            this.reader.consume();
+            this.input.consume();
         }
     }
 
@@ -577,7 +606,7 @@ public class Scanner
      */
     public void skipUntil(final Class<?> valueClass) {
         while (available() && !follows(valueClass)) {
-            this.reader.consume();
+            this.input.consume();
         }
     }
 
@@ -643,7 +672,7 @@ public class Scanner
         final var builder = new StringBuilder();
 
         while (available() && !follows(pattern)) {
-            builder.append((char) this.reader.consume());
+            builder.append((char) this.input.consume());
         }
 
         return builder.toString();
@@ -662,7 +691,7 @@ public class Scanner
         final var builder = new StringBuilder();
 
         while (available() && !follows(string)) {
-            builder.append((char) this.reader.consume());
+            builder.append((char) this.input.consume());
         }
 
         return builder.toString();
@@ -679,7 +708,7 @@ public class Scanner
         final var builder = new StringBuilder();
 
         while (available() && !follows(evaluator)) {
-            builder.append((char) this.reader.consume());
+            builder.append((char) this.input.consume());
         }
 
         return builder.toString();
@@ -697,7 +726,7 @@ public class Scanner
         final var builder = new StringBuilder();
 
         while (available() && !follows(valueClass)) {
-            builder.append((char) this.reader.consume());
+            builder.append((char) this.input.consume());
         }
 
         return builder.toString();
@@ -764,5 +793,171 @@ public class Scanner
      */
     public boolean hasNext() {
         return available();
+    }
+
+    /**
+     * Determines if the next character (after applying filters) matches the specified character.
+     *
+     * @param c the character to check
+     * @return {@code true} if the next character matches, {@code false} otherwise
+     */
+    public boolean follows(final char c) {
+        return available() && this.input.peek() == c;
+    }
+
+    /**
+     * Peeks at the next character without consuming it, after applying any registered {@link Filter}s.
+     * Returns {@code '\0'} if there is no further content.
+     *
+     * @return the next character, or {@code '\0'} if there is no further content
+     */
+    public char peekChar() {
+        if (!available()) {
+            return '\0';
+        }
+        final int peeked = this.input.peek();
+        return peeked == -1 ? '\0' : (char) peeked;
+    }
+
+    /**
+     * Consumes and returns the next character, after applying any registered {@link Filter}s.
+     *
+     * @return the consumed character
+     * @throws ParseException if there is no further content
+     */
+    public char consumeChar()
+        throws ParseException {
+        if (!available()) {
+            throw new ParseException(this.input.getLocation(), "any character", "(end of input)");
+        }
+        final int consumed = this.input.consume();
+        if (consumed == -1) {
+            throw new ParseException(this.input.getLocation(), "any character", "(end of input)");
+        }
+        return (char) consumed;
+    }
+
+    /**
+     * Consumes balanced delimiters and returns the body (excluding both outer delimiters).
+     * <p>
+     * Precondition: the scanner is positioned on the opening delimiter character (after any registered filters
+     * have skipped whitespace/comments).  After verifying that opening character, the body is read at the raw
+     * character level — filters do <em>not</em> apply inside the body, so whitespace and comment characters are
+     * preserved verbatim.
+     * <p>
+     * Nested {@code open}/{@code close} pairs increment and decrement an internal depth counter.  Quoted strings
+     * inside the body are skipped intact — single and double quotes are both supported, with backslash escape —
+     * so quote-enclosed delimiters do not affect the depth.
+     *
+     * @param open  the opening delimiter character
+     * @param close the closing delimiter character (must differ from {@code open})
+     * @return the body, excluding both outer delimiters
+     * @throws ParseException if not positioned on {@code open}, or if EOF is reached before the matching close
+     */
+    public String consumeBalanced(final char open, final char close)
+        throws ParseException {
+        if (!follows(open)) {
+            throw new ParseException(getLocation(), String.valueOf(open),
+                hasNext() ? String.valueOf(peekChar()) : "(end of input)");
+        }
+        consumeChar();
+        final var body = new StringBuilder();
+        int depth = 1;
+        boolean inString = false;
+        char stringChar = 0;
+        boolean escape = false;
+        while (depth > 0) {
+            final int next = this.input.consume();
+            if (next == -1) {
+                throw new ParseException(this.input.getLocation(), String.valueOf(close), "(end of input)");
+            }
+            final char c = (char) next;
+            if (escape) {
+                escape = false;
+                body.append(c);
+                continue;
+            }
+            if (inString) {
+                body.append(c);
+                if (c == '\\') {
+                    escape = true;
+                } else if (c == stringChar) {
+                    inString = false;
+                }
+                continue;
+            }
+            if (c == '"' || c == '\'') {
+                inString = true;
+                stringChar = c;
+                body.append(c);
+            } else if (c == open) {
+                depth++;
+                body.append(c);
+            } else if (c == close) {
+                depth--;
+                if (depth > 0) {
+                    body.append(c);
+                }
+            } else {
+                body.append(c);
+            }
+        }
+        return body.toString();
+    }
+
+    /**
+     * Determines if the next character (after applying filters) satisfies the specified {@link IntPredicate}.
+     *
+     * @param predicate the {@link IntPredicate}
+     * @return {@code true} if the next character satisfies the predicate, {@code false} otherwise
+     */
+    public boolean follows(final IntPredicate predicate) {
+        return predicate != null && available() && predicate.test(this.input.peek());
+    }
+
+    /**
+     * Attempts to {@link Optional}ly consume the next character if it satisfies the specified {@link IntPredicate},
+     * returning it as an {@link Optional} or {@link Optional#empty()} if it does not.
+     *
+     * @param predicate the {@link IntPredicate}
+     * @return the {@link Optional}ly consumed character
+     */
+    public Optional<Character> optionallyConsume(final IntPredicate predicate) {
+        if (!follows(predicate)) {
+            return Optional.empty();
+        }
+        final int consumed = this.input.consume();
+        return consumed == -1 ? Optional.empty() : Optional.of((char) consumed);
+    }
+
+    /**
+     * Repeatedly skips characters while they satisfy the specified {@link IntPredicate}.
+     * Should no character satisfy the predicate, nothing happens.
+     *
+     * @param predicate the {@link IntPredicate}
+     */
+    public void skipWhile(final IntPredicate predicate) {
+        while (follows(predicate)) {
+            this.input.consume();
+        }
+    }
+
+    /**
+     * Repeatedly consumes characters while they satisfy the specified {@link IntPredicate},
+     * returning all consumed characters as a {@link String}.
+     *
+     * @param predicate the {@link IntPredicate}
+     * @return the consumed characters
+     */
+    public String consumeWhile(final IntPredicate predicate) {
+        final var sb = new StringBuilder();
+        while (follows(predicate)) {
+            final int c = this.input.consume();
+            if (c == -1) {
+                break;
+            }
+            sb.append((char) c);
+        }
+        return sb.toString();
     }
 }

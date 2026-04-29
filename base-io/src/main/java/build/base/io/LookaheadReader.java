@@ -71,6 +71,11 @@ public class LookaheadReader
     private int column;
 
     /**
+     * The zero-based character offset of the current index position in the stream.
+     */
+    private long offset;
+
+    /**
      * Constructs a {@link LookaheadReader} based on the provided {@link Reader} with a desired lookahead character
      * buffer size.
      *
@@ -88,6 +93,7 @@ public class LookaheadReader
 
         this.line = 1;
         this.column = 1;
+        this.offset = 0;
     }
 
     /**
@@ -174,7 +180,7 @@ public class LookaheadReader
      * @return the current {@link Location}
      */
     public Location getLocation() {
-        return Location.of(this.line, this.column);
+        return Location.of(this.line, this.column, this.offset);
     }
 
     /**
@@ -275,6 +281,7 @@ public class LookaheadReader
                 this.column++;
             }
 
+            this.offset++;
             return value;
         }
         else {
@@ -329,6 +336,7 @@ public class LookaheadReader
             }
         }
 
+        this.offset += builder.length();
         return builder.toString();
     }
 
@@ -425,13 +433,23 @@ public class LookaheadReader
         int getColumn();
 
         /**
-         * Creates a {@link Location} given the specified line and column positions.
+         * Obtains the zero-based character offset from the start of the stream.
+         *
+         * @return the character offset
+         */
+        default long getOffset() {
+            return 0;
+        }
+
+        /**
+         * Creates a {@link Location} given the specified line, column, and character offset.
          *
          * @param line   the line
          * @param column the column
+         * @param offset the zero-based character offset
          * @return a new {@link Location}
          */
-        static Location of(final int line, final int column) {
+        static Location of(final int line, final int column, final long offset) {
             return new Location() {
                 @Override
                 public int getLine() {
@@ -441,6 +459,11 @@ public class LookaheadReader
                 @Override
                 public int getColumn() {
                     return column;
+                }
+
+                @Override
+                public long getOffset() {
+                    return offset;
                 }
 
                 @Override
@@ -463,6 +486,17 @@ public class LookaheadReader
                     return "Location " + getLine() + ":" + getColumn();
                 }
             };
+        }
+
+        /**
+         * Creates a {@link Location} given the specified line and column positions.
+         *
+         * @param line   the line
+         * @param column the column
+         * @return a new {@link Location}
+         */
+        static Location of(final int line, final int column) {
+            return of(line, column, 0);
         }
     }
 }

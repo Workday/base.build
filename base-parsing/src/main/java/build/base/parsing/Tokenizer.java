@@ -70,7 +70,10 @@ public class Tokenizer<N> {
         if (this.ignoreWhitespace) {
             scanner.register(Filter.WHITESPACE);
         }
+        return tokenize(scanner, true);
+    }
 
+    private List<Token<N>> tokenize(final Scanner scanner, final boolean throwOnUnknown) {
         final var tokens = new ArrayList<Token<N>>();
 
         while (scanner.hasNext()) {
@@ -84,8 +87,11 @@ public class Tokenizer<N> {
                 }
             }
             if (!tokenProcessed) {
-                throw new ExpressionParserException(
-                    "The expression contains an unknown or unexpected token at " + scanner.getLocation());
+                if (throwOnUnknown) {
+                    throw new ExpressionParserException(
+                        "The expression contains an unknown or unexpected token at " + scanner.getLocation());
+                }
+                break;
             }
         }
 

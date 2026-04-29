@@ -386,4 +386,100 @@ class ScannerTests {
         assertThat(scanner.follows("rest"))
             .isTrue();
     }
+
+    /**
+     * Ensure {@link Scanner#follows(char)} detects the next character.
+     */
+    @Test
+    void shouldFollowsChar() {
+        final var scanner = new Scanner("abc");
+
+        assertThat(scanner.follows('a')).isTrue();
+        assertThat(scanner.follows('b')).isFalse();
+
+        scanner.consume("a");
+
+        assertThat(scanner.follows('b')).isTrue();
+    }
+
+    /**
+     * Ensure {@link Scanner#follows(char)} respects registered filters.
+     */
+    @Test
+    void shouldFollowsCharWithFilter() {
+        final var scanner = new Scanner("  x")
+            .register(Filter.WHITESPACE);
+
+        assertThat(scanner.follows('x')).isTrue();
+    }
+
+    /**
+     * Ensure {@link Scanner#peekChar()} returns the next character without consuming it.
+     */
+    @Test
+    void shouldPeekChar() {
+        final var scanner = new Scanner("ab");
+
+        assertThat(scanner.peekChar()).isEqualTo('a');
+        assertThat(scanner.peekChar()).isEqualTo('a');
+
+        scanner.consume("a");
+
+        assertThat(scanner.peekChar()).isEqualTo('b');
+    }
+
+    /**
+     * Ensure {@link Scanner#peekChar()} returns {@code '\0'} on empty input.
+     */
+    @Test
+    void shouldPeekCharOnEmpty() {
+        final var scanner = new Scanner("");
+
+        assertThat(scanner.peekChar()).isEqualTo('\0');
+    }
+
+    /**
+     * Ensure {@link Scanner#peekChar()} respects registered filters.
+     */
+    @Test
+    void shouldPeekCharWithFilter() {
+        final var scanner = new Scanner("  z")
+            .register(Filter.WHITESPACE);
+
+        assertThat(scanner.peekChar()).isEqualTo('z');
+    }
+
+    /**
+     * Ensure {@link Scanner#consumeChar()} consumes and returns the next character.
+     */
+    @Test
+    void shouldConsumeChar() {
+        final var scanner = new Scanner("xy");
+
+        assertThat(scanner.consumeChar()).isEqualTo('x');
+        assertThat(scanner.consumeChar()).isEqualTo('y');
+        assertThat(scanner.hasNext()).isFalse();
+    }
+
+    /**
+     * Ensure {@link Scanner#consumeChar()} respects registered filters.
+     */
+    @Test
+    void shouldConsumeCharWithFilter() {
+        final var scanner = new Scanner("  q")
+            .register(Filter.WHITESPACE);
+
+        assertThat(scanner.consumeChar()).isEqualTo('q');
+        assertThat(scanner.hasNext()).isFalse();
+    }
+
+    /**
+     * Ensure {@link Scanner#consumeChar()} throws on empty input.
+     */
+    @Test
+    void shouldConsumeCharThrowsOnEmpty() {
+        final var scanner = new Scanner("");
+
+        org.junit.jupiter.api.Assertions.assertThrows(ParseException.class, scanner::consumeChar);
+    }
 }
