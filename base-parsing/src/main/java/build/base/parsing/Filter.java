@@ -9,9 +9,9 @@ package build.base.parsing;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,50 +20,48 @@ package build.base.parsing;
  * #L%
  */
 
-import build.base.io.LookaheadReader;
-
 import java.util.function.Consumer;
 
 /**
- * A {@link Consumer} of a {@link LookaheadReader} that skips content to be ignored while parsing.
+ * A {@link Consumer} of a {@link ScannerInput} that skips content to be ignored while parsing.
  *
  * @author brian.oliver
  * @since Mar-2020
  */
 public interface Filter
-    extends Consumer<LookaheadReader> {
+    extends Consumer<ScannerInput> {
 
     /**
      * A {@link Filter} for characters that satisfy {@link Character#isWhitespace(char)}.
      */
-    Filter WHITESPACE = (reader) -> {
-        while (reader.follows(Character::isWhitespace)) {
-            reader.skip(1);
+    Filter WHITESPACE = (input) -> {
+        while (input.follows(Character::isWhitespace)) {
+            input.skip(1);
         }
     };
 
     /**
      * A {@link Filter} for Java Single Line Comments.
      */
-    Filter JAVA_SINGLE_LINE_COMMENT = (reader) -> {
-        if (reader.follows("//")) {
-            reader.skipWhile(c -> c != '\n');
+    Filter JAVA_SINGLE_LINE_COMMENT = (input) -> {
+        if (input.follows("//")) {
+            input.skipWhile(c -> c != '\n');
         }
     };
 
     /**
      * A {@link Filter} for Java Multiline Comments.
      */
-    Filter JAVA_MULTILINE_COMMENT = (reader) -> {
-        if (reader.follows("/*")) {
-            reader.consume(2);
+    Filter JAVA_MULTILINE_COMMENT = (input) -> {
+        if (input.follows("/*")) {
+            input.consume(2);
 
-            while (!reader.follows("*/")) {
-                reader.skip(1);
+            while (!input.follows("*/")) {
+                input.skip(1);
             }
 
-            if (reader.consume(2).length() != 2) {
-                throw new ParseException(reader.getLocation(), "*/", reader.peekMaximum());
+            if (input.consume(2).length() != 2) {
+                throw new ParseException(input.getLocation(), "*/", input.peekMaximum());
             }
         }
     };
