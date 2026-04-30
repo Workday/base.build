@@ -271,4 +271,29 @@ class ExpressionParserTests {
             Arguments.of("1 2", 3)
         );
     }
+
+    // --- Scanner-based parse(Scanner) overload ---
+
+    @Test
+    void shouldParseExpressionFromScanner() {
+        final var scanner = new Scanner("1 + 2");
+        scanner.register(Filter.WHITESPACE);
+        assertThat(parser.tryParse(scanner)).contains(new Add(new Num("1"), new Num("2")));
+        assertThat(scanner.hasNext()).isFalse();
+    }
+
+    @Test
+    void shouldStopAtUnrecognizedTokenLeavingItUnconsumed() {
+        final var scanner = new Scanner("1 + 2}rest");
+        scanner.register(Filter.WHITESPACE);
+        assertThat(parser.tryParse(scanner)).contains(new Add(new Num("1"), new Num("2")));
+        assertThat(scanner.follows('}')).isTrue();
+    }
+
+    @Test
+    void shouldReturnEmptyFromScannerWhenNoTokensMatch() {
+        final var scanner = new Scanner("}rest");
+        assertThat(parser.tryParse(scanner)).isEmpty();
+        assertThat(scanner.follows('}')).isTrue();
+    }
 }

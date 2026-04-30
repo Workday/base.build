@@ -73,6 +73,17 @@ public class Tokenizer<N> {
         return tokenize(scanner, true);
     }
 
+    /**
+     * Tokenizes from an already-positioned {@link Scanner}, stopping when no token parser matches rather than
+     * throwing.  The scanner is used as-is — no filters are registered on it.
+     *
+     * @param scanner the scanner to read from
+     * @return the list of tokens parsed before the first unrecognised position
+     */
+    public List<Token<N>> tokenize(final Scanner scanner) {
+        return tokenize(scanner, false);
+    }
+
     private List<Token<N>> tokenize(final Scanner scanner, final boolean throwOnUnknown) {
         final var tokens = new ArrayList<Token<N>>();
 

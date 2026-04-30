@@ -3,23 +3,21 @@ package build.base.template.processor;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class TemplatePipelineTests {
 
-    private static List<String> load(final String name) throws IOException {
+    private static String load(final String name) throws IOException {
         final var resource = TemplatePipelineTests.class.getClassLoader()
             .getResourceAsStream("templates/" + name);
         assertThat(resource).as("test resource: " + name).isNotNull();
-        return new String(resource.readAllBytes()).lines().toList();
+        return new String(resource.readAllBytes());
     }
 
     @Test
     void shouldProcessHelloTemplate() throws IOException {
-        final var lines = load("hello.jt");
-        final var parsed = JtParser.parse(lines, "hello.jt");
+        final var parsed = JtParser.parse(load("hello.jt"), "hello.jt");
 
         assertThat(parsed.className()).isEqualTo("HelloTemplate");
         assertThat(parsed.outType()).isEqualTo("HtmlOut");
@@ -35,8 +33,7 @@ class TemplatePipelineTests {
 
     @Test
     void shouldProcessTasksTemplate() throws IOException {
-        final var lines = load("tasks.jt");
-        final var parsed = JtParser.parse(lines, "tasks.jt");
+        final var parsed = JtParser.parse(load("tasks.jt"), "tasks.jt");
 
         assertThat(parsed.className()).isEqualTo("TasksTemplate");
         assertThat(parsed.imports()).contains("import java.util.List");
@@ -50,8 +47,7 @@ class TemplatePipelineTests {
 
     @Test
     void shouldProcessItemTemplateWithConditionalExpression() throws IOException {
-        final var lines = load("item.jt");
-        final var parsed = JtParser.parse(lines, "item.jt");
+        final var parsed = JtParser.parse(load("item.jt"), "item.jt");
 
         assertThat(parsed.className()).isEqualTo("ItemTemplate");
 

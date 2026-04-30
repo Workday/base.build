@@ -33,8 +33,9 @@ import build.base.expression.ast.Node;
 import build.base.expression.ast.PropertyAccessNode;
 import build.base.expression.ast.SemicolonNode;
 import build.base.expression.ast.UnaryOpNode;
+import build.base.parsing.AbstractParser;
 import build.base.parsing.Evaluator;
-import build.base.parsing.Filter;
+import build.base.parsing.ParseException;
 import build.base.parsing.Scanner;
 import jakarta.el.ELException;
 
@@ -52,7 +53,8 @@ import java.util.regex.Pattern;
  *   <li>{@link #parseExpression(String)} — parses a raw expression (no {@code ${}} wrapper)</li>
  * </ul>
  */
-public final class ELParser {
+public final class ELParser
+    extends AbstractParser<Node> {
 
     // Evaluators for lexical token recognition
     private static final Evaluator<String> IDENTIFIER =
@@ -73,14 +75,33 @@ public final class ELParser {
         Evaluator.create(Pattern.compile("'(?:[^'\\\\]|\\\\.)*'|\"(?:[^\"\\\\]|\\\\.)*\""),
             s -> unescape(s.substring(1, s.length() - 1), s.charAt(0)), "string literal");
 
-    // Pattern used for keyword word-boundary checks
-    private static final Pattern IDENT_CONTINUE = Pattern.compile("[a-zA-Z0-9_$].*");
+    private enum Mode {EXPRESSION, FULL_WRAPPED}
 
-    private final Scanner scanner;
+    private final String originalInput;
+    private final Mode mode;
 
-    private ELParser(final String input) {
-        this.scanner = new Scanner(input);
-        this.scanner.register(Filter.WHITESPACE);
+    private ELParser(final String input, final Mode mode) {
+        super(input);
+        this.originalInput = input;
+        this.mode = mode;
+    }
+
+    @Override
+    protected Node parse() {
+        return switch (mode) {
+            case FULL_WRAPPED -> {
+                scanner.consume(2);  // ${ or #{
+                final Node node = parseSemicolon();
+                expect("}");
+                yield node;
+            }
+            default -> parseSemicolon();
+        };
+    }
+
+    @Override
+    protected RuntimeException translate(final ParseException cause) {
+        return new ELException("Failed to parse expression: " + originalInput, cause);
     }
 
     // -------------------------------------------------------------------------
@@ -89,31 +110,14 @@ public final class ELParser {
 
     /**
      * Parses a full EL expression string like {@code "${name}"} or {@code "#{name}"}.
-     * Throws {@link ELException} if the expression is malformed.
+     * Returns a {@link LiteralNode} when the input contains no expression delimiters.
+     * Throws {@link ELException} if a wrapped expression is malformed.
      */
     public static Node parseFull(final String expression) {
-        try {
-            final var parser = new ELParser(expression);
-            final var s = parser.scanner;
-            if (s.follows("${") || s.follows("#{")) {
-                s.consume(2);
-                final var node = parser.parseSemicolon();
-                if (!s.follows("}")) {
-                    throw new ELException("Expected '}' at end of expression: " + expression);
-                }
-                s.consume("}");
-                if (s.hasNext()) {
-                    throw new ELException("Unexpected content after expression: " + expression);
-                }
-                return node;
-            }
-            // No expression delimiters — treat as literal text
-            return new LiteralNode(expression);
-        } catch (final ELException e) {
-            throw e;
-        } catch (final Exception e) {
-            throw new ELException("Failed to parse expression: " + expression, e);
+        if (expression.startsWith("${") || expression.startsWith("#{")) {
+            return new ELParser(expression, Mode.FULL_WRAPPED).run();
         }
+        return new LiteralNode(expression);
     }
 
     /**
@@ -122,45 +126,28 @@ public final class ELParser {
      */
     public static Node parseComposite(final String template) {
         final var parts = new ArrayList<Node>();
-        var i = 0;
-        final var len = template.length();
-        var textStart = 0;
-
-        while (i < len) {
-            final var isDollar = i + 1 < len && template.charAt(i) == '$' && template.charAt(i + 1) == '{';
-            final var isHash   = i + 1 < len && template.charAt(i) == '#' && template.charAt(i + 1) == '{';
-            if (isDollar || isHash) {
-                if (i > textStart) {
-                    parts.add(new LiteralNode(template.substring(textStart, i)));
-                }
-                final var exprStart = i + 2;
-                var depth = 1;
-                var j = exprStart;
-                while (j < len && depth > 0) {
-                    final var ch = template.charAt(j);
-                    if (ch == '{') {
-                        depth++;
-                    } else if (ch == '}') {
-                        depth--;
+        final var sb = new StringBuilder();
+        try (var s = new Scanner(template)) {
+            // No filters — preserve whitespace in literal text.
+            while (s.hasNext()) {
+                if (s.follows("${") || s.follows("#{")) {
+                    if (sb.length() > 0) {
+                        parts.add(new LiteralNode(sb.toString()));
+                        sb.setLength(0);
                     }
-                    if (depth > 0) {
-                        j++;
-                    } else {
-                        break;
-                    }
+                    s.consume(1);  // $ or #
+                    parts.add(parseExpression(s.consumeBalanced('{', '}')));
+                } else {
+                    sb.append(s.consumeChar());
                 }
-                if (depth != 0) {
-                    throw new ELException("Unclosed expression in template: " + template);
-                }
-                parts.add(parseExpression(template.substring(exprStart, j)));
-                i = j + 1;
-                textStart = i;
-            } else {
-                i++;
             }
+        } catch (final ELException e) {
+            throw e;
+        } catch (final Exception e) {
+            throw new ELException("Unclosed expression in template: " + template, e);
         }
-        if (textStart < len) {
-            parts.add(new LiteralNode(template.substring(textStart)));
+        if (sb.length() > 0) {
+            parts.add(new LiteralNode(sb.toString()));
         }
         if (parts.size() == 1) {
             return parts.get(0);
@@ -172,18 +159,7 @@ public final class ELParser {
      * Parses a raw expression string (without {@code ${}} wrapping).
      */
     public static Node parseExpression(final String expression) {
-        try {
-            final var parser = new ELParser(expression);
-            final var node = parser.parseSemicolon();
-            if (parser.scanner.hasNext()) {
-                throw new ELException("Unexpected characters after expression: " + expression);
-            }
-            return node;
-        } catch (final ELException e) {
-            throw e;
-        } catch (final Exception e) {
-            throw new ELException("Failed to parse expression: " + expression, e);
-        }
+        return new ELParser(expression, Mode.EXPRESSION).run();
     }
 
     // -------------------------------------------------------------------------
@@ -468,10 +444,10 @@ public final class ELParser {
 
             // Keyword literals
             return switch (ident) {
-                case "true"  -> new LiteralNode(Boolean.TRUE);
+                case "true" -> new LiteralNode(Boolean.TRUE);
                 case "false" -> new LiteralNode(Boolean.FALSE);
-                case "null"  -> new LiteralNode(null);
-                default      -> new IdentifierNode(ident);
+                case "null" -> new LiteralNode(null);
+                default -> new IdentifierNode(ident);
             };
         }
 
@@ -505,23 +481,6 @@ public final class ELParser {
             }
         }
         return List.copyOf(args);
-    }
-
-    /**
-     * Returns true if the scanner starts with the keyword {@code kw} and the next character after
-     * is not an identifier-continue character (i.e. the keyword is a standalone token).
-     */
-    private boolean followsKeyword(final String kw) {
-        if (!scanner.follows(kw)) {
-            return false;
-        }
-        // Peek at what follows the keyword — use a pattern that matches kw + ident-char
-        // If that matches, then kw is part of a larger identifier, not a keyword
-        return !scanner.follows(Pattern.compile(Pattern.quote(kw) + "[a-zA-Z0-9_$]"));
-    }
-
-    private void consumeKeyword(final String kw) {
-        scanner.consume(kw);
     }
 
     private static String unescape(final String raw, final char quote) {

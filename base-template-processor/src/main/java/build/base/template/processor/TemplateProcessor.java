@@ -25,7 +25,6 @@ import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 import javax.annotation.processing.AbstractProcessor;
@@ -77,8 +76,7 @@ public final class TemplateProcessor extends AbstractProcessor {
 
     private void processTemplate(final Path jtFile) {
         try {
-            final List<String> lines = Files.readAllLines(jtFile);
-            final ParsedTemplate parsed = JtParser.parse(lines, jtFile.toString());
+            final ParsedTemplate parsed = JtParser.parse(Files.readString(jtFile), jtFile.toString());
             final String source = CodeGenerator.generate(parsed);
 
             final javax.tools.JavaFileObject output = processingEnv.getFiler()

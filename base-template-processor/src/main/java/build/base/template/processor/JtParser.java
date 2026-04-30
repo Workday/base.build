@@ -20,8 +20,8 @@ package build.base.template.processor;
  * #L%
  */
 
-import build.base.parsing.Filter;
-import build.base.parsing.Scanner;
+import build.base.parsing.AbstractParser;
+import build.base.parsing.ParseException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,94 +39,11 @@ final class JtParser {
     private JtParser() {
     }
 
-    static ParsedTemplate parse(final List<String> lines,
-                                final String sourceFile) {
-        final List<String> headerLines = new ArrayList<>();
-        final List<String> bodyLines = new ArrayList<>();
-        boolean inBody = false;
-
-        for (final String line : lines) {
-            final String trimmed = line.trim();
-            if (!inBody) {
-                if (!trimmed.isEmpty()) {
-                    headerLines.add(trimmed);
-                }
-                if (trimmed.startsWith("template ")) {
-                    inBody = true;
-                }
-            } else if (trimmed.equals("@end")) {
-                break;
-            } else {
-                bodyLines.add(line);
-            }
-        }
-
-        String packageName = "";
-        final List<String> imports = new ArrayList<>();
-        String outType = null;
-        String className = null;
-        String params = null;
-
-        try (var scanner = new Scanner(String.join("\n", headerLines))) {
-            scanner.register(Filter.WHITESPACE);
-            while (scanner.hasNext()) {
-                if (scanner.follows("package")) {
-                    scanner.skip("package");
-                    packageName = scanner.consume(QUALIFIED_NAME);
-                    scanner.skip(";");
-                } else if (scanner.follows("import")) {
-                    scanner.skip("import");
-                    imports.add("import " + scanner.consume(IMPORT_BODY));
-                    scanner.skip(";");
-                } else if (scanner.follows("template")) {
-                    scanner.skip("template");
-                    outType = scanner.consume(QUALIFIED_NAME);
-                    className = scanner.consume(QUALIFIED_NAME);
-                    params = consumeParams(scanner);
-                    break;
-                } else {
-                    break;
-                }
-            }
-        } catch (final Exception e) {
-            throw new JtParseException(sourceFile + ": " + e.getMessage());
-        }
-
-        if (className == null) {
-            throw new JtParseException(sourceFile + ": missing template declaration");
-        }
-
-        final List<BodyNode> body = new ArrayList<>();
-        for (final String line : bodyLines) {
-            parseBodyLine(line, body);
-        }
-
-        return new ParsedTemplate(packageName, imports, outType, className, params, body);
+    static ParsedTemplate parse(final String content, final String sourceFile) {
+        return new JtFileParser(content, sourceFile).run();
     }
 
-    private static String consumeParams(final Scanner scanner) {
-        scanner.consume("(");
-        final var sb = new StringBuilder();
-        int depth = 1;
-        while (depth > 0) {
-            final String ch = scanner.consume(1);
-            if ("(".equals(ch)) {
-                depth++;
-                sb.append(ch);
-            } else if (")".equals(ch)) {
-                depth--;
-                if (depth > 0) {
-                    sb.append(ch);
-                }
-            } else {
-                sb.append(ch);
-            }
-        }
-        return sb.toString();
-    }
-
-    private static void parseBodyLine(final String line,
-                                      final List<BodyNode> body) {
+    private static void parseBodyLine(final String line, final List<BodyNode> body) {
         final String trimmed = line.trim();
         if (trimmed.startsWith("@include ")) {
             body.add(new BodyNode.Include(trimmed.substring("@include ".length()).trim()));
@@ -136,68 +53,146 @@ final class JtParser {
             body.add(new BodyNode.CodeLine(trimmed.substring(1).trim()));
             return;
         }
-        parseTextLine(line + "\n", body);
+        body.addAll(new TextLineParser(line + "\n").run());
     }
 
-    static void parseTextLine(final String line,
-                              final List<BodyNode> body) {
-        try (var scanner = new Scanner(line)) {
+    /** Test-facing entry point: parse a single text line, appending the resulting nodes to {@code body}. */
+    static void parseTextLine(final String line, final List<BodyNode> body) {
+        body.addAll(new TextLineParser(line).run());
+    }
+
+    /**
+     * Parses the full content of a {@code .jt} file.
+     * <p>
+     * No whitespace filter is registered — whitespace is significant in the body and is skipped manually
+     * between header tokens.
+     */
+    private static final class JtFileParser
+        extends AbstractParser<ParsedTemplate> {
+
+        private final String sourceFile;
+
+        JtFileParser(final String content, final String sourceFile) {
+            super(content);
+            this.sourceFile = sourceFile;
+        }
+
+        @Override
+        protected void registerFilters(final build.base.parsing.Scanner s) {
+            // No filters — whitespace is significant in the body.
+        }
+
+        @Override
+        protected ParsedTemplate parse() {
+            String packageName = "";
+            final List<String> imports = new ArrayList<>();
+
+            skip();
+            if (followsKeyword("package")) {
+                consumeKeyword("package");
+                skip();
+                packageName = scanner.consume(QUALIFIED_NAME);
+                skip();
+                expect(";");
+            }
+
+            skip();
+            while (followsKeyword("import")) {
+                consumeKeyword("import");
+                skip();
+                imports.add("import " + scanner.consume(IMPORT_BODY));
+                skip();
+                expect(";");
+                skip();
+            }
+
+            if (!followsKeyword("template")) {
+                throw new JtParseException(sourceFile + ": missing template declaration");
+            }
+            consumeKeyword("template");
+            skip();
+            final String outType = scanner.consume(QUALIFIED_NAME);
+            skip();
+            final String className = scanner.consume(QUALIFIED_NAME);
+            skip();
+            final String params = scanner.consumeBalanced('(', ')');
+
+            // Drain the remainder of the template declaration line (e.g. " {")
+            while (scanner.hasNext() && scanner.peekChar() != '\n') {
+                scanner.consumeChar();
+            }
+            if (scanner.follows('\n')) {
+                scanner.consumeChar();
+            }
+
+            // Parse body lines until @end
+            final List<BodyNode> body = new ArrayList<>();
+            while (scanner.hasNext()) {
+                final String line = scanner.consumeUntil("\n");
+                if (scanner.follows('\n')) {
+                    scanner.consumeChar();
+                }
+                if (line.trim().equals("@end")) {
+                    break;
+                }
+                parseBodyLine(line, body);
+            }
+
+            // Drain any content after @end so AbstractParser's full-consumption check passes
+            while (scanner.hasNext()) {
+                scanner.consumeChar();
+            }
+
+            return new ParsedTemplate(packageName, imports, outType, className, params, body);
+        }
+
+        /** Skips whitespace (including newlines) between header tokens. */
+        private void skip() {
+            scanner.skipWhile(c -> Character.isWhitespace((char) c));
+        }
+
+        @Override
+        protected RuntimeException translate(final ParseException cause) {
+            return new JtParseException(sourceFile + ": " + cause.getMessage());
+        }
+    }
+
+    /**
+     * Parses a single line of the template body, alternating literal text with {@code #{...}} expression
+     * interpolations.
+     */
+    private static final class TextLineParser
+        extends AbstractParser<List<BodyNode>> {
+
+        TextLineParser(final String input) {
+            super(input);
+        }
+
+        @Override
+        protected void registerFilters(final build.base.parsing.Scanner s) {
+            // No filters — whitespace and other characters in literal template text must be preserved verbatim.
+        }
+
+        @Override
+        protected List<BodyNode> parse() {
+            final List<BodyNode> nodes = new ArrayList<>();
             while (scanner.hasNext()) {
                 if (scanner.follows("#{")) {
-                    body.add(new BodyNode.Expression(consumeExpression(scanner)));
+                    scanner.consume("#");
+                    nodes.add(new BodyNode.Expression(scanner.consumeBalanced('{', '}')));
                 } else {
                     final String raw = scanner.consumeUntil("#{");
                     if (!raw.isEmpty()) {
-                        body.add(new BodyNode.RawText(raw));
+                        nodes.add(new BodyNode.RawText(raw));
                     }
                 }
             }
-        } catch (final JtParseException e) {
-            throw e;
-        } catch (final Exception e) {
-            throw new JtParseException("Unclosed expression in: " + line.trim());
+            return nodes;
         }
-    }
 
-    private static String consumeExpression(final Scanner scanner) {
-        scanner.consume("#{");
-        final var sb = new StringBuilder();
-        int depth = 1;
-        boolean inString = false;
-        char stringChar = 0;
-        boolean escape = false;
-        while (depth > 0) {
-            final char c = scanner.consume(1).charAt(0);
-            if (escape) {
-                escape = false;
-                sb.append(c);
-                continue;
-            }
-            if (inString) {
-                sb.append(c);
-                if (c == '\\') {
-                    escape = true;
-                } else if (c == stringChar) {
-                    inString = false;
-                }
-                continue;
-            }
-            if (c == '"' || c == '\'') {
-                inString = true;
-                stringChar = c;
-                sb.append(c);
-            } else if (c == '{') {
-                depth++;
-                sb.append(c);
-            } else if (c == '}') {
-                depth--;
-                if (depth > 0) {
-                    sb.append(c);
-                }
-            } else {
-                sb.append(c);
-            }
+        @Override
+        protected RuntimeException translate(final ParseException cause) {
+            return new JtParseException("Unclosed expression: " + cause.getMessage());
         }
-        return sb.toString();
     }
 }
