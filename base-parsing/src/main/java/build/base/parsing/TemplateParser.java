@@ -46,7 +46,8 @@ import java.util.function.Function;
  * @author tim.berston
  * @since Mar-2025
  */
-public class TemplateParser<N> {
+public class TemplateParser<N>
+    implements Rule<List<N>> {
 
     private final List<TokenParser<N>> tokenParsers;
     private final BiFunction<N, N, Optional<N>> tryMerge;
@@ -91,27 +92,53 @@ public class TemplateParser<N> {
         if (expression == null || expression.isBlank()) {
             return List.of();
         }
+        final var scanner = new Scanner(expression);
+        final List<N> result = tryParse(scanner).orElse(List.of());
+        if (scanner.hasNext()) {
+            throw new ExpressionParserException(
+                "The expression contains an unknown or unexpected token at " + scanner.getLocation());
+        }
+        return result;
+    }
 
-        final var tokenizer = new Tokenizer<>(this.tokenParsers, false);
-        final var tokens = tokenizer.tokenize(expression);
+    /**
+     * Parses as much of the template as possible from the current position of the {@link Scanner}, stopping
+     * when no token matches rather than throwing.  Returns {@link Optional#empty()} if no tokens were recognised.
+     * <p>
+     * The scanner is used as-is — no filters are registered on it.
+     *
+     * @param scanner the scanner to read from
+     * @return the parsed node list, or {@link Optional#empty()} if nothing was recognised
+     * @throws ExpressionParserException if the template is malformed
+     */
+    @Override
+    public Optional<List<N>> tryParse(final Scanner scanner) {
+        final var tokens = new Tokenizer<>(this.tokenParsers, false).tokenize(scanner);
+        if (tokens.isEmpty()) {
+            return Optional.empty();
+        }
         try {
-            final var nodes = new ArrayList<N>();
-            for (final var token : tokens) {
-                final var node = token.tokenParser().createNodeResolver(token).resolve();
-                if (this.tryMerge != null && !nodes.isEmpty()) {
-                    final var merged = this.tryMerge.apply(nodes.getLast(), node);
-                    if (merged.isPresent()) {
-                        nodes.set(nodes.size() - 1, merged.get());
-                        continue;
-                    }
-                }
-                nodes.add(node);
-            }
-            return nodes;
+            return Optional.of(resolveNodes(tokens));
         } catch (final ExpressionParserException e) {
-            throw e; // preserve domain exceptions — ExpressionParserException extends RuntimeException
+            throw e;
         } catch (final RuntimeException e) {
             throw new ExpressionParserException("There was an error parsing the expression", e);
         }
+    }
+
+    private List<N> resolveNodes(final List<Token<N>> tokens) {
+        final var nodes = new ArrayList<N>();
+        for (final var token : tokens) {
+            final var node = token.tokenParser().createNodeResolver(token).resolve();
+            if (this.tryMerge != null && !nodes.isEmpty()) {
+                final var merged = this.tryMerge.apply(nodes.getLast(), node);
+                if (merged.isPresent()) {
+                    nodes.set(nodes.size() - 1, merged.get());
+                    continue;
+                }
+            }
+            nodes.add(node);
+        }
+        return nodes;
     }
 }

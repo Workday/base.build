@@ -34,6 +34,7 @@ import build.base.parsing.tokenparsers.UnaryTokenParser;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -45,7 +46,8 @@ import java.util.function.Function;
  * @author tim.berston
  * @since Nov-2024
  */
-public class ExpressionParser<N> {
+public class ExpressionParser<N>
+    implements Rule<N> {
 
     private final List<TokenParser<N>> tokenParsers;
 
@@ -110,17 +112,40 @@ public class ExpressionParser<N> {
         if (expression == null || expression.isBlank()) {
             return null;
         }
+        final var scanner = new Scanner(expression);
+        scanner.register(Filter.WHITESPACE);
+        final N result = tryParse(scanner).orElse(null);
+        if (scanner.hasNext()) {
+            throw new ExpressionParserException(
+                "The expression contains an unknown or unexpected token at " + scanner.getLocation());
+        }
+        return result;
+    }
 
-        final var tokenizer = new Tokenizer<>(this.tokenParsers);
-        final var tokens = tokenizer.tokenize(expression);
+    /**
+     * Parses as much of the expression as possible from the current position of the {@link Scanner}, stopping
+     * when no token matches rather than throwing.  Returns {@link Optional#empty()} if no tokens were recognised.
+     * <p>
+     * The scanner is used as-is — filters (e.g. whitespace) must be registered by the caller before invoking.
+     *
+     * @param scanner the scanner to read from
+     * @return the parsed node, or {@link Optional#empty()} if nothing was recognised
+     * @throws ExpressionParserException if tokens were partially parsed but the expression is malformed
+     */
+    @Override
+    public Optional<N> tryParse(final Scanner scanner) {
+        final var tokens = new Tokenizer<>(this.tokenParsers).tokenize(scanner);
+        if (tokens.isEmpty()) {
+            return Optional.empty();
+        }
         final var stackManager = new ExpressionStackManager<N>();
         try {
             for (final var token : tokens) {
                 stackManager.push(token.tokenParser().createNodeResolver(token));
             }
-            return stackManager.getExpressionRoot().resolve();
+            return Optional.of(stackManager.getExpressionRoot().resolve());
         } catch (final ExpressionParserException e) {
-            throw e; // preserve domain exceptions — ExpressionParserException extends RuntimeException
+            throw e;
         } catch (final RuntimeException e) {
             throw new ExpressionParserException("There was an error parsing the expression", e);
         }

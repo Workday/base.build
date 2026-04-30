@@ -2,7 +2,7 @@ package build.base.template.processor;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
+import java.util.ArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -11,14 +11,13 @@ class JtParserTests {
 
     @Test
     void shouldParseMinimalTemplate() {
-        final var lines = List.of(
-            "package com.example;",
-            "",
-            "template HtmlOut HelloTemplate(String name) {",
-            "<h1>Hello</h1>",
-            "@end"
-        );
-        final var result = JtParser.parse(lines, "hello.jt");
+        final var result = JtParser.parse("""
+            package com.example;
+
+            template HtmlOut HelloTemplate(String name) {
+            <h1>Hello</h1>
+            @end
+            """, "hello.jt");
 
         assertThat(result.packageName()).isEqualTo("com.example");
         assertThat(result.outType()).isEqualTo("HtmlOut");
@@ -28,22 +27,22 @@ class JtParserTests {
 
     @Test
     void shouldParseImports() {
-        final var lines = List.of(
-            "package com.example;",
-            "",
-            "import java.util.List;",
-            "import com.example.Task;",
-            "",
-            "template HtmlOut TasksTemplate(List<Task> tasks) {",
-            "@end");
-        final var result = JtParser.parse(lines, "tasks.jt");
+        final var result = JtParser.parse("""
+            package com.example;
+
+            import java.util.List;
+            import com.example.Task;
+
+            template HtmlOut TasksTemplate(List<Task> tasks) {
+            @end
+            """, "tasks.jt");
 
         assertThat(result.imports()).containsExactly("import java.util.List", "import com.example.Task");
     }
 
     @Test
     void shouldParseTextLine() {
-        final var body = new java.util.ArrayList<BodyNode>();
+        final var body = new ArrayList<BodyNode>();
         JtParser.parseTextLine("<h1>Hello</h1>\n", body);
 
         assertThat(body).containsExactly(new BodyNode.RawText("<h1>Hello</h1>\n"));
@@ -51,7 +50,7 @@ class JtParserTests {
 
     @Test
     void shouldParseExpressionInTextLine() {
-        final var body = new java.util.ArrayList<BodyNode>();
+        final var body = new ArrayList<BodyNode>();
         JtParser.parseTextLine("<h1>#{name}</h1>\n", body);
 
         assertThat(body).containsExactly(
@@ -63,7 +62,7 @@ class JtParserTests {
 
     @Test
     void shouldParseMultipleExpressionsOnOneLine() {
-        final var body = new java.util.ArrayList<BodyNode>();
+        final var body = new ArrayList<BodyNode>();
         JtParser.parseTextLine("<li id=\"#{task.id()}\">#{task.title()}</li>\n", body);
 
         assertThat(body).containsExactly(
@@ -77,7 +76,7 @@ class JtParserTests {
 
     @Test
     void shouldParseExpressionWithStringLiteralContainingBrace() {
-        final var body = new java.util.ArrayList<BodyNode>();
+        final var body = new ArrayList<BodyNode>();
         JtParser.parseTextLine("#{task.done() ? \" done\" : \"\"}\n", body);
 
         assertThat(body).containsExactly(
@@ -88,85 +87,79 @@ class JtParserTests {
 
     @Test
     void shouldParseCodeLine() {
-        final var lines = List.of(
-            "package com.example;",
-            "template HtmlOut T(java.util.List<String> items) {",
-            "@for (var item : items) {",
-            "<li>#{item}</li>",
-            "@}",
-            "@end"
-        );
-        final var result = JtParser.parse(lines, "t.jt");
+        final var result = JtParser.parse("""
+            package com.example;
+            template HtmlOut T(java.util.List<String> items) {
+            @for (var item : items) {
+            <li>#{item}</li>
+            @}
+            @end
+            """, "t.jt");
         assertThat(result.body()).contains(new BodyNode.CodeLine("for (var item : items) {"));
         assertThat(result.body()).contains(new BodyNode.CodeLine("}"));
     }
 
     @Test
     void shouldParseInclude() {
-        final var lines = List.of(
-            "package com.example;",
-            "template HtmlOut T(Object item) {",
-            "@include new ItemTemplate(item)",
-            "@end"
-        );
-        final var result = JtParser.parse(lines, "t.jt");
+        final var result = JtParser.parse("""
+            package com.example;
+            template HtmlOut T(Object item) {
+            @include new ItemTemplate(item)
+            @end
+            """, "t.jt");
         assertThat(result.body()).contains(new BodyNode.Include("new ItemTemplate(item)"));
     }
 
     @Test
     void shouldParseWildcardImport() {
-        final var lines = List.of(
-            "package com.example;",
-            "import java.util.*;",
-            "template HtmlOut T() {",
-            "@end"
-        );
-        final var result = JtParser.parse(lines, "t.jt");
+        final var result = JtParser.parse("""
+            package com.example;
+            import java.util.*;
+            template HtmlOut T() {
+            @end
+            """, "t.jt");
         assertThat(result.imports()).containsExactly("import java.util.*");
     }
 
     @Test
     void shouldParseStaticImport() {
-        final var lines = List.of(
-            "package com.example;",
-            "import static java.util.List.of;",
-            "template HtmlOut T() {",
-            "@end"
-        );
-        final var result = JtParser.parse(lines, "t.jt");
+        final var result = JtParser.parse("""
+            package com.example;
+            import static java.util.List.of;
+            template HtmlOut T() {
+            @end
+            """, "t.jt");
         assertThat(result.imports()).containsExactly("import static java.util.List.of");
     }
 
     @Test
     void shouldParseStaticWildcardImport() {
-        final var lines = List.of(
-            "package com.example;",
-            "import static java.util.Collections.*;",
-            "template HtmlOut T() {",
-            "@end"
-        );
-        final var result = JtParser.parse(lines, "t.jt");
+        final var result = JtParser.parse("""
+            package com.example;
+            import static java.util.Collections.*;
+            template HtmlOut T() {
+            @end
+            """, "t.jt");
         assertThat(result.imports()).containsExactly("import static java.util.Collections.*");
     }
 
     @Test
     void shouldPreserveBareClosingBraceInBody() {
-        final var lines = List.of(
-            "package com.example;",
-            "template HtmlOut T() {",
-            "<style>",
-            "body {",
-            "    color: red;",
-            "}",
-            "</style>",
-            "<script>",
-            "function x() {",
-            "    return 1;",
-            "}",
-            "</script>",
-            "@end"
-        );
-        final var result = JtParser.parse(lines, "t.jt");
+        final var result = JtParser.parse("""
+            package com.example;
+            template HtmlOut T() {
+            <style>
+            body {
+                color: red;
+            }
+            </style>
+            <script>
+            function x() {
+                return 1;
+            }
+            </script>
+            @end
+            """, "t.jt");
 
         assertThat(result.body()).contains(
             new BodyNode.RawText("body {\n"),
@@ -177,8 +170,7 @@ class JtParserTests {
 
     @Test
     void shouldThrowOnMissingDeclaration() {
-        final var lines = List.of("package com.example;");
-        assertThatThrownBy(() -> JtParser.parse(lines, "bad.jt"))
+        assertThatThrownBy(() -> JtParser.parse("package com.example;", "bad.jt"))
             .isInstanceOf(JtParseException.class)
             .hasMessageContaining("missing template declaration");
     }

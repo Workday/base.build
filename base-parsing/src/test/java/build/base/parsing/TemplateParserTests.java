@@ -1,6 +1,7 @@
 package build.base.parsing;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -102,5 +103,20 @@ class TemplateParserTests {
             Arguments.of("[prev]\n[curr]",
                 List.of(new Var("prev"), new Text("\n"), new Var("curr")))
         );
+    }
+
+    // --- Scanner-based parse(Scanner) overload ---
+
+    @Test
+    void shouldParseTemplateFromScanner() {
+        final var scanner = new Scanner("[name] text");
+        assertThat(parser.tryParse(scanner)).contains(List.of(new Var("name"), new Text(" text")));
+        assertThat(scanner.hasNext()).isFalse();
+    }
+
+    @Test
+    void shouldReturnEmptyFromScannerWhenAtEndOfInput() {
+        final var scanner = new Scanner("");
+        assertThat(parser.tryParse(scanner)).isEmpty();
     }
 }
