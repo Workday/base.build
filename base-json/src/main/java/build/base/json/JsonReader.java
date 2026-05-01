@@ -67,7 +67,7 @@ final class JsonReader extends AbstractParser<JsonValue> {
                 s.consume("null");
                 yield Optional.of(JsonNull.INSTANCE);
             }
-            default  -> {
+            default -> {
                 if (c == '-' || isAsciiDigit(c)) {
                     yield Optional.of(parseNumber());
                 }
@@ -106,8 +106,8 @@ final class JsonReader extends AbstractParser<JsonValue> {
 
     @Override
     protected RuntimeException translate(final ParseException cause) {
-        final var loc    = cause.getLocation().orElse(null);
-        final long line   = loc != null ? loc.getLine()   : 0;
+        final var loc = cause.getLocation().orElse(null);
+        final long line = loc != null ? loc.getLine() : 0;
         final long column = loc != null ? loc.getColumn() : 0;
         final long offset = loc != null ? loc.getOffset() : 0;
         final var msg = "Expected " + cause.getExpected() + " but found " + cause.getFound();
@@ -132,24 +132,22 @@ final class JsonReader extends AbstractParser<JsonValue> {
                 }
                 final char esc = scanner.consumeChar();
                 switch (esc) {
-                    case '"'  -> sb.append('"');
+                    case '"' -> sb.append('"');
                     case '\\' -> sb.append('\\');
-                    case '/'  -> sb.append('/');
-                    case 'b'  -> sb.append('\b');
-                    case 'f'  -> sb.append('\f');
-                    case 'n'  -> sb.append('\n');
-                    case 'r'  -> sb.append('\r');
-                    case 't'  -> sb.append('\t');
-                    case 'u'  -> sb.append(parseUnicodeEscape());
-                    default   -> throw new ParseException(scanner.getLocation(),
+                    case '/' -> sb.append('/');
+                    case 'b' -> sb.append('\b');
+                    case 'f' -> sb.append('\f');
+                    case 'n' -> sb.append('\n');
+                    case 'r' -> sb.append('\r');
+                    case 't' -> sb.append('\t');
+                    case 'u' -> sb.append(parseUnicodeEscape());
+                    default -> throw new ParseException(scanner.getLocation(),
                         "valid escape character", String.valueOf(esc));
                 }
-            }
-            else if (c < 0x20) {
+            } else if (c < 0x20) {
                 throw new ParseException(scanner.getLocation(),
                     "printable character", "control character U+" + Integer.toHexString(c));
-            }
-            else {
+            } else {
                 sb.append(c);
             }
         }
@@ -160,8 +158,7 @@ final class JsonReader extends AbstractParser<JsonValue> {
         final String hex = scanner.consume(4);
         try {
             return (char) Integer.parseInt(hex, 16);
-        }
-        catch (final NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             throw new ParseException(scanner.getLocation(), "4 hex digits", hex);
         }
     }
@@ -206,12 +203,10 @@ final class JsonReader extends AbstractParser<JsonValue> {
             }
             try {
                 return JsonNumber.of(Long.parseLong(numStr));
-            }
-            catch (final NumberFormatException e) {
+            } catch (final NumberFormatException e) {
                 return JsonNumber.of(new BigInteger(numStr));
             }
-        }
-        catch (final NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             throw new ParseException(scanner.getLocation(), "valid number", numStr);
         }
     }
@@ -249,8 +244,7 @@ final class JsonReader extends AbstractParser<JsonValue> {
                 }
             }
             throw new ParseException(scanner.getLocation(), "'}'", "(end of input)");
-        }
-        finally {
+        } finally {
             depth--;
         }
     }
@@ -286,8 +280,7 @@ final class JsonReader extends AbstractParser<JsonValue> {
                 }
             }
             throw new ParseException(scanner.getLocation(), "']'", "(end of input)");
-        }
-        finally {
+        } finally {
             depth--;
         }
     }

@@ -63,7 +63,7 @@ class JsonObjectBuilderTests {
     @Test
     void buildIsImmutable() {
         var builder = JsonObject.builder().put("k", "v");
-        var first  = builder.build();
+        var first = builder.build();
         var second = builder.put("k2", "v2").build();
         assertThat(first.members()).containsOnlyKeys("k");
         assertThat(second.members()).containsOnlyKeys("k", "k2");

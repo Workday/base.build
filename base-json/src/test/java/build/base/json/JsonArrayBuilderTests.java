@@ -54,7 +54,7 @@ class JsonArrayBuilderTests {
     @Test
     void buildIsImmutable() {
         var builder = JsonArray.builder().add("x");
-        var first  = builder.build();
+        var first = builder.build();
         var second = builder.add("y").build();
         assertThat(first.values()).hasSize(1);
         assertThat(second.values()).hasSize(2);

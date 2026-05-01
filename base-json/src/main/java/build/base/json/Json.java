@@ -66,8 +66,7 @@ public final class Json {
             .onUnmappableCharacter(CodingErrorAction.REPORT);
         try {
             return JsonReader.read(decoder.decode(ByteBuffer.wrap(input)).toString());
-        }
-        catch (final CharacterCodingException e) {
+        } catch (final CharacterCodingException e) {
             throw new JsonParseException("Invalid UTF-8 encoding: " + e.getMessage(), 0, 0, 0, null);
         }
     }
@@ -102,7 +101,7 @@ public final class Json {
      * @param format the output format
      */
     public static void write(final JsonValue value, final Writer writer, final JsonFormat format) {
-        Objects.requireNonNull(value,  "value");
+        Objects.requireNonNull(value, "value");
         Objects.requireNonNull(writer, "writer");
         Objects.requireNonNull(format, "format");
         JsonWriter.write(value, writer, format);

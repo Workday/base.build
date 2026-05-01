@@ -40,10 +40,10 @@ public final class JsonParseException extends RuntimeException {
                        final String path) {
 
         super(buildMessage(message, line, column, offset, path));
-        this.line   = line;
+        this.line = line;
         this.column = column;
         this.offset = offset;
-        this.path   = path;
+        this.path = path;
     }
 
     private static String buildMessage(final String message,
@@ -63,22 +63,30 @@ public final class JsonParseException extends RuntimeException {
         return sb.toString();
     }
 
-    /** 1-based line number where the error occurred. */
+    /**
+     * 1-based line number where the error occurred.
+     */
     public long line() {
         return line;
     }
 
-    /** 1-based column number where the error occurred. */
+    /**
+     * 1-based column number where the error occurred.
+     */
     public long column() {
         return column;
     }
 
-    /** 0-based character offset from the start of input where the error occurred. */
+    /**
+     * 0-based character offset from the start of input where the error occurred.
+     */
     public long offset() {
         return offset;
     }
 
-    /** JSON-pointer-style path to the value being parsed, or {@code null} at the root. */
+    /**
+     * JSON-pointer-style path to the value being parsed, or {@code null} at the root.
+     */
     public String path() {
         return path;
     }

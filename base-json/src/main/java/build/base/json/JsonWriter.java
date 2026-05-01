@@ -31,8 +31,7 @@ final class JsonWriter {
     static void write(final JsonValue value, final Appendable out, final JsonFormat format) {
         try {
             write(value, out, format, 0);
-        }
-        catch (final IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
     }
@@ -44,12 +43,12 @@ final class JsonWriter {
         throws IOException {
 
         switch (value) {
-            case JsonString  s -> writeString(s.value(), out);
-            case JsonNumber  n -> writeNumber(n.toNumber(), out);
+            case JsonString s -> writeString(s.value(), out);
+            case JsonNumber n -> writeNumber(n.toNumber(), out);
             case JsonBoolean b -> out.append(b.value() ? "true" : "false");
-            case JsonNull    _ -> out.append("null");
-            case JsonObject  o -> writeObject(o, out, format, depth);
-            case JsonArray   a -> writeArray(a, out, format, depth);
+            case JsonNull _ -> out.append("null");
+            case JsonObject o -> writeObject(o, out, format, depth);
+            case JsonArray a -> writeArray(a, out, format, depth);
         }
     }
 
@@ -60,18 +59,17 @@ final class JsonWriter {
         for (int i = 0; i < value.length(); i++) {
             final char c = value.charAt(i);
             switch (c) {
-                case '"'  -> out.append("\\\"");
+                case '"' -> out.append("\\\"");
                 case '\\' -> out.append("\\\\");
                 case '\b' -> out.append("\\b");
                 case '\f' -> out.append("\\f");
                 case '\n' -> out.append("\\n");
                 case '\r' -> out.append("\\r");
                 case '\t' -> out.append("\\t");
-                default   -> {
+                default -> {
                     if (c < 0x20) {
                         out.append(String.format("\\u%04x", (int) c));
-                    }
-                    else {
+                    } else {
                         out.append(c);
                     }
                 }

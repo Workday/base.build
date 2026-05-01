@@ -31,7 +31,7 @@ final class JsonObjectBuilderImpl implements JsonObject.Builder {
 
     @Override
     public JsonObject.Builder put(final String key, final JsonValue value) {
-        Objects.requireNonNull(key,   "key");
+        Objects.requireNonNull(key, "key");
         Objects.requireNonNull(value, "value");
         this.members.put(key, value);
         return this;

@@ -52,8 +52,7 @@ class JsonTestSuiteTests {
                 .getResource("JSONTestSuite/test_parsing")
                 .toURI());
             return Files.list(dir).filter(p -> p.toString().endsWith(".json")).sorted();
-        }
-        catch (final URISyntaxException | IOException e) {
+        } catch (final URISyntaxException | IOException e) {
             throw new RuntimeException(e);
         }
     }
@@ -61,15 +60,14 @@ class JsonTestSuiteTests {
     @ParameterizedTest(name = "{0}")
     @MethodSource("testFiles")
     void testParsing(final Path file) throws IOException {
-        final var name  = file.getFileName().toString();
+        final var name = file.getFileName().toString();
         final var bytes = Files.readAllBytes(file);
 
         if (name.startsWith("y_")) {
             assertThatCode(() -> Json.parse(bytes))
                 .as("expected parse to succeed: %s", name)
                 .doesNotThrowAnyException();
-        }
-        else if (name.startsWith("n_")) {
+        } else if (name.startsWith("n_")) {
             assertThatThrownBy(() -> Json.parse(bytes))
                 .as("expected parse to fail: %s", name)
                 .isInstanceOf(JsonParseException.class);
