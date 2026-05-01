@@ -20,17 +20,26 @@ package build.base.json;
  * #L%
  */
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
- * A JSON object value — an unordered collection of named members.
+ * A JSON object value — an ordered collection of named members that preserves insertion order.
  */
 public sealed interface JsonObject extends JsonValue permits JsonObjectImpl {
 
     Map<String, JsonValue> members();
 
     static JsonObject of(final Map<String, JsonValue> members) {
-        return new JsonObjectImpl(Map.copyOf(members));
+        final var copy = new LinkedHashMap<String, JsonValue>(members.size());
+        members.forEach((k, v) -> {
+            Objects.requireNonNull(k, "key");
+            Objects.requireNonNull(v, "value");
+            copy.put(k, v);
+        });
+        return new JsonObjectImpl(Collections.unmodifiableMap(copy));
     }
 
     static Builder builder() {

@@ -30,6 +30,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -244,7 +245,7 @@ final class JsonReader extends AbstractParser<JsonValue> {
                 skipWs(scanner);
                 if (scanner.follows('}')) {
                     scanner.consumeChar();
-                    return new JsonObjectImpl(Map.copyOf(members));
+                    return new JsonObjectImpl(Collections.unmodifiableMap(new LinkedHashMap<>(members)));
                 }
             }
             throw new ParseException(scanner.getLocation(), "'}'", "(end of input)");
