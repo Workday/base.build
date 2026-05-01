@@ -1,0 +1,64 @@
+package build.base.json;
+
+/*-
+ * #%L
+ * base.build JSON
+ * %%
+ * Copyright (C) 2025 Workday Inc
+ * %%
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * #L%
+ */
+
+import java.util.List;
+
+/**
+ * A JSON array value — an ordered sequence of values.
+ */
+public sealed interface JsonArray extends JsonValue permits JsonArrayImpl {
+
+    List<JsonValue> values();
+
+    static JsonArray of(final List<JsonValue> values) {
+        return new JsonArrayImpl(List.copyOf(values));
+    }
+
+    static Builder builder() {
+        return new JsonArrayBuilderImpl();
+    }
+
+    @Override
+    default JsonArray asArray() {
+        return this;
+    }
+
+    /**
+     * A mutable builder that produces an immutable {@link JsonArray}.
+     */
+    interface Builder {
+
+        Builder add(JsonValue value);
+
+        Builder add(String value);
+
+        Builder add(Number value);
+
+        Builder add(boolean value);
+
+        Builder addNull();
+
+        Builder addAll(Iterable<String> values);
+
+        JsonArray build();
+    }
+}

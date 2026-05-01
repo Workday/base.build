@@ -100,6 +100,7 @@
         <module>base-foundation</module>
         <module>base-graph</module>
         <module>base-io</module>
+        <module>base-json</module>
         <module>base-logging</module>
         <module>base-marshalling</module>
         <module>base-mereology</module>
@@ -168,6 +169,11 @@
             <dependency>
                 <groupId>build.base</groupId>
                 <artifactId>base-io</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-json</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
