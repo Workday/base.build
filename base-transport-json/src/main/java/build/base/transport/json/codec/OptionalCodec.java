@@ -9,9 +9,9 @@ package build.base.transport.json.codec;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,19 +21,20 @@ package build.base.transport.json.codec;
  */
 
 import build.base.foundation.Introspection;
+import build.base.json.JsonArray;
+import build.base.json.JsonNull;
+import build.base.json.JsonValue;
 import build.base.marshalling.Marshaller;
 import build.base.marshalling.Parameter;
 import build.base.transport.json.ConditionalCodec;
 import build.base.transport.json.JsonTransport;
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
 
-import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
 
 /**
- * A {@link ConditionalCodec} of {@link Optional} values.
+ * A {@link ConditionalCodec} for {@link Optional} values. Encoded as a JSON array: {@code []} for empty,
+ * {@code [element]} for present.
  *
  * @author brian.oliver
  * @since Nov-2024
@@ -58,79 +59,40 @@ public class OptionalCodec
     }
 
     @Override
-    public void write(final JsonTransport transport,
-                      final Parameter parameter,
-                      final Optional<?> optional,
-                      final JsonGenerator generator,
-                      final Marshaller marshaller)
-        throws IOException {
+    public JsonValue encode(final JsonTransport transport,
+                            final Parameter parameter,
+                            final Optional<?> optional,
+                            final Marshaller marshaller) {
 
         if (optional == null) {
-            generator.writeNull();
+            return JsonNull.INSTANCE;
         }
-        else {
-            // determine the type of Optional element
-            final var elementType = Introspection.getParameterType(parameter.type())
-                .orElseThrow(() -> new IOException("Failed to determine a Optional<T> element type T for ["
-                    + parameter.name() + "] of type [" + parameter.type() + "]"));
-
-            if (optional.isEmpty()) {
-                generator.writeStartArray();
-                generator.writeEndArray();
-            }
-            else {
-                generator.writeStartArray();
-                final var element = optional.get();
-                transport.write(parameter, elementType, element, generator, marshaller);
-                generator.writeEndArray();
-            }
+        if (optional.isEmpty()) {
+            return JsonArray.of(List.of());
         }
+        final var elementType = Introspection.getParameterType(parameter.type())
+            .orElseThrow(() -> new IllegalStateException(
+                "Failed to determine Optional<T> element type for [" + parameter.name() + "]"));
+        return JsonArray.of(List.of(transport.encode(parameter, elementType, optional.get(), marshaller)));
     }
 
     @Override
-    public Optional<?> read(final JsonTransport transport,
-                            final Parameter parameter,
-                            final JsonParser parser,
-                            final Marshaller marshaller)
-        throws IOException {
+    public Optional<?> decode(final JsonTransport transport,
+                              final Parameter parameter,
+                              final JsonValue value,
+                              final Marshaller marshaller) {
 
-        if (parser.currentToken() == JsonToken.VALUE_NULL) {
-            parser.nextToken();
-
+        if (value instanceof JsonNull) {
             return null;
         }
-
-        // determine the type of Optional element
+        final var array = value.asArray();
+        if (array.values().isEmpty()) {
+            return Optional.empty();
+        }
         final var elementType = Introspection.getParameterType(parameter.type())
-            .orElseThrow(() -> new IOException("Failed to determine a Optional<T> element type T for ["
-                + parameter.name() + "] of type [" + parameter.type() + "]"
-                + " at " + parser.currentLocation()));
-
-        // determine the class of Optional element
-        final var elementClass = Introspection.getClassFromType(elementType)
-            .orElse(Object.class);
-
-        if (parser.currentToken() == JsonToken.START_ARRAY) {
-            // skip start of array "["
-            parser.nextToken();
-
-            if (parser.currentToken() == JsonToken.END_ARRAY) {
-                // skip end of array "]"
-                parser.nextToken();
-
-                return Optional.empty();
-            }
-
-            final var optional = Optional.ofNullable(transport.read(parameter, elementClass, parser, marshaller));
-
-            // skip end of array "]"
-            parser.nextToken();
-
-            return optional;
-        }
-        else {
-            // unexpected token
-            throw new IllegalStateException("Unexpected token [" + parser.currentToken() + "]");
-        }
+            .orElseThrow(() -> new IllegalStateException(
+                "Failed to determine Optional<T> element type for [" + parameter.name() + "]"));
+        final var elementClass = Introspection.getClassFromType(elementType).orElse(Object.class);
+        return Optional.ofNullable(transport.decode(parameter, elementClass, array.element(0), marshaller));
     }
 }
