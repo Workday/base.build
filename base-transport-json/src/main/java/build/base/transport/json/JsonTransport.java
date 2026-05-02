@@ -9,9 +9,9 @@ package build.base.transport.json;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,7 +24,11 @@ import build.base.foundation.Introspection;
 import build.base.foundation.stream.Streamable;
 import build.base.foundation.stream.Streams;
 import build.base.foundation.tuple.Pair;
-import build.base.foundation.tuple.Triple;
+import build.base.json.Json;
+import build.base.json.JsonNull;
+import build.base.json.JsonObject;
+import build.base.json.JsonString;
+import build.base.json.JsonValue;
 import build.base.marshalling.Marshalled;
 import build.base.marshalling.Marshaller;
 import build.base.marshalling.Marshalling;
@@ -55,14 +59,16 @@ import build.base.transport.json.codec.StreamableCodec;
 import build.base.transport.json.codec.StringCodec;
 import build.base.transport.json.codec.TimestampCodec;
 import build.base.transport.json.codec.ZonedDateTimeCodec;
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
 
 import java.io.IOException;
+import java.io.Reader;
+import java.io.UncheckedIOException;
+import java.io.Writer;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -77,23 +83,14 @@ import java.util.stream.Collectors;
 public class JsonTransport
     extends AbstractTransport<JsonTransport> {
 
-    /**
-     * The JSON field name to capture the {@link Class} name for {@link Marshalled}.
-     */
-    private static final String TYPE_FIELD_NAME = "type";
+    private static final String TYPE_FIELD = "@type";
+    private static final String VALUE_FIELD = "value";
 
-    /**
-     * The {@link SchemaFactory} used by the {@link JsonTransport} for unmarshalling.
-     */
     private final SchemaFactory schemaFactory;
-
-    /**
-     * The {@link Codec}s by {@link Class} supported by the {@link JsonTransport}.
-     */
     private final ConcurrentHashMap<Class<?>, Codec<?>> codecs;
 
     /**
-     * Constructs a default {@link JsonTransport} using the specified {@link SchemaFactory}.
+     * Constructs a {@link JsonTransport} using the specified {@link SchemaFactory}.
      *
      * @param schemaFactory the {@link SchemaFactory}
      */
@@ -144,7 +141,6 @@ public class JsonTransport
         if (codec != null) {
             this.codecs.put(codec.codecClass(), codec);
         }
-
         return this;
     }
 
@@ -162,283 +158,267 @@ public class JsonTransport
     }
 
     /**
-     * Write the specified {@link Marshalled} {@link Object} using the provided {@link JsonGenerator}.
+     * Encodes a {@link Marshalled} object as a {@link JsonObject} and writes it to the provided {@link Writer}.
      *
-     * @param marshalled the {@link Marshalled}
-     * @param generator  the {@link JsonGenerator}
-     * @throws IOException should writing fail
+     * @param marshalled the {@link Marshalled} object
+     * @param writer     the destination
+     */
+    public void write(final Marshalled<?> marshalled, final Writer writer) {
+        Objects.requireNonNull(marshalled, "marshalled");
+        Objects.requireNonNull(writer, "writer");
+        try {
+            writer.write(encodeMarshalled(marshalled, this.schemaFactory.newMarshaller()).toJsonString());
+        }
+        catch (final IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * Parses JSON from the provided {@link Reader} and decodes it as a {@link Marshalled} object.
+     *
+     * @param reader the source of JSON text
+     * @param <T>    the type of the marshalled object
+     * @return the decoded {@link Marshalled}
+     */
+    public <T> Marshalled<T> read(final Reader reader) {
+        Objects.requireNonNull(reader, "reader");
+        return decodeMarshalled(Json.parse(reader).asObject(), this.schemaFactory.newMarshaller());
+    }
+
+    /**
+     * Parses JSON from the provided {@link Reader} and decodes it as a {@link Marshalled} object,
+     * using the given {@link Marshaller} (e.g. one with bound values).
+     *
+     * @param reader     the source of JSON text
+     * @param marshaller the {@link Marshaller} to use
+     * @param <T>        the type of the marshalled object
+     * @return the decoded {@link Marshalled}
+     */
+    public <T> Marshalled<T> read(final Reader reader, final Marshaller marshaller) {
+        Objects.requireNonNull(reader, "reader");
+        Objects.requireNonNull(marshaller, "marshaller");
+        return decodeMarshalled(Json.parse(reader).asObject(), marshaller);
+    }
+
+    /**
+     * Encodes a value of the given type as a {@link JsonValue}, used by codecs for recursive encoding.
+     *
+     * @param parameter  the {@link Parameter}
+     * @param valueType  the {@link Type} of the value
+     * @param value      the value
+     * @param marshaller the {@link Marshaller}
+     * @return the encoded {@link JsonValue}
      */
     @SuppressWarnings("unchecked")
-    public void write(final Marshalled<?> marshalled,
-                      final JsonGenerator generator)
-        throws IOException {
+    public JsonValue encode(final Parameter parameter,
+                            final Type valueType,
+                            final Object value,
+                            final Marshaller marshaller) {
 
-        Objects.requireNonNull(marshalled, "The Marshalled object must not be null");
-        Objects.requireNonNull(generator, "The JsonGenerator must not be null");
+        if (value == null) {
+            return JsonNull.INSTANCE;
+        }
 
-        generator.writeStartObject();
-        generator.writeStringField(TYPE_FIELD_NAME, marshalled.schema().owner().getName());
+        if (value instanceof Marshalled<?> marshalledValue) {
+            return encodeMarshalled(marshalledValue, marshaller);
+        }
 
-        final Iterable<Pair<Parameter, Object>> iterable = () -> Streams.zip(
+        final var valueClass = Introspection.getClassFromType(valueType)
+            .orElseThrow(() -> new IllegalStateException(
+                "Failed to determine class of [" + valueType + "] for parameter [" + parameter.name() + "]"));
+
+        final var optionalTransformer = getTransformer(valueClass);
+        if (optionalTransformer.isPresent()) {
+            final var transformer = optionalTransformer.orElseThrow();
+            final var transformed = transformer.transform(marshaller, value);
+            if (Objects.equals(transformed, value)) {
+                throw new IllegalStateException("Transformer produced no change for parameter ["
+                    + parameter.name() + "] of type [" + valueClass + "]");
+            }
+            return encode(parameter, transformer.targetClass(), transformed, marshaller);
+        }
+
+        final var optionalCodec = getCodec(valueType);
+        if (optionalCodec.isPresent()) {
+            return optionalCodec.orElseThrow().encode(this, parameter, value, marshaller);
+        }
+
+        if (this.schemaFactory.isMarshallable(valueClass)) {
+            return encodeMarshalled(marshaller.marshal(value), marshaller);
+        }
+
+        if (valueClass == Object.class
+            || valueClass.isInterface()
+            || Modifier.isAbstract(valueClass.getModifiers())) {
+
+            return JsonObject.of(Map.of(
+                TYPE_FIELD,  JsonString.of(value.getClass().getName()),
+                VALUE_FIELD, encode(parameter, value.getClass(), value, marshaller)));
+        }
+
+        throw new IllegalStateException("No Transformer, Codec, or @Marshal-able found for parameter ["
+            + parameter.name() + "] of type [" + valueClass + "]");
+    }
+
+    /**
+     * Decodes a value of the given type from a {@link JsonValue}, used by codecs for recursive decoding.
+     *
+     * @param parameter  the {@link Parameter}
+     * @param type       the {@link Type} of the expected value
+     * @param value      the {@link JsonValue} to decode
+     * @param marshaller the {@link Marshaller}
+     * @param <T>        the type of the decoded value
+     * @return the decoded value
+     */
+    @SuppressWarnings("unchecked")
+    public <T> T decode(final Parameter parameter,
+                        final Type type,
+                        final JsonValue value,
+                        final Marshaller marshaller) {
+
+        if (value instanceof JsonNull) {
+            return null;
+        }
+
+        final var optionalTransformer = getTransformer(type);
+        if (optionalTransformer.isPresent()) {
+            final var transformer = optionalTransformer.orElseThrow();
+            final var read = decode(parameter, transformer.targetClass(), value, marshaller);
+            final var reformed = transformer.reform(marshaller, type, read);
+            if (Objects.equals(reformed, read)) {
+                throw new IllegalStateException("Transformer reform produced no change for parameter ["
+                    + parameter.name() + "] of type [" + type + "]");
+            }
+            return (T) reformed;
+        }
+
+        final var readableClass = Introspection.getClassFromType(type)
+            .orElseThrow(() -> new IllegalStateException(
+                "Failed to determine class for parameter [" + parameter.name() + "] of type [" + type + "]"));
+
+        final var optionalCodec = getCodec(type);
+        if (optionalCodec.isPresent()) {
+            return (T) optionalCodec.orElseThrow().decode(this, parameter, value, marshaller);
+        }
+
+        if (Marshalled.class.isAssignableFrom(readableClass)) {
+            return (T) decodeMarshalled(value.asObject(), marshaller);
+        }
+
+        if (marshaller.isMarshallable(readableClass)) {
+            return (T) marshaller.unmarshal(decodeMarshalled(value.asObject(), marshaller));
+        }
+
+        if (readableClass == Object.class
+            || readableClass.isInterface()
+            || Modifier.isAbstract(readableClass.getModifiers())) {
+
+            final var wrapper = value.asObject();
+            final var typeName = wrapper.get(TYPE_FIELD).asString().value();
+            final var concreteType = loadClass(typeName, parameter);
+            return (T) decode(parameter, concreteType, wrapper.get(VALUE_FIELD), marshaller);
+        }
+
+        throw new IllegalStateException("No Transformer, Codec, or @Marshal-able found for parameter ["
+            + parameter.name() + "] of type [" + readableClass + "]");
+    }
+
+    @SuppressWarnings("unchecked")
+    private JsonObject encodeMarshalled(final Marshalled<?> marshalled, final Marshaller marshaller) {
+        final var members = new LinkedHashMap<String, JsonValue>();
+        members.put(TYPE_FIELD, JsonString.of(marshalled.schema().owner().getName()));
+
+        final Iterable<Pair<Parameter, Object>> pairs = () -> Streams.zip(
                 marshalled.schema().parameters().stream(),
                 marshalled.values().stream())
             .iterator();
 
-        final var marshaller = this.schemaFactory.newMarshaller();
-
-        for (Pair<Parameter, Object> pair : iterable) {
+        for (final var pair : pairs) {
             final var parameter = pair.first();
             final var value = pair.second();
 
             final var codec = getCodec(parameter.type());
 
-            // when there is a Codec for the type, determine if the value should be ignored
             if (codec.filter(ConditionalCodec.class::isInstance)
                 .map(ConditionalCodec.class::cast)
-                .filter(conditionalCodec -> conditionalCodec.ignore(value))
+                .filter(cc -> cc.ignore(value))
                 .isPresent()) {
-
                 continue;
             }
 
-            generator.writeFieldName(parameter.name());
-
-            write(parameter, parameter.type(), value, generator, marshaller);
+            members.put(parameter.name(), encode(parameter, parameter.type(), value, marshaller));
         }
 
-        generator.writeEndObject();
-        generator.flush();
+        return JsonObject.of(members);
     }
 
-    /**
-     * Write the specified {@link Parameter} value, of the specified {@link Type}, which may be different from
-     * the {@link Parameter#type()} due to transformation, using the {@link Codec}s known to the {@link Transport}
-     * with the provided {@link JsonGenerator}, further transforming the value as needed.
-     *
-     * @param parameter  the {@link Parameter}
-     * @param valueType  the {@link Type} of value
-     * @param value      the value
-     * @param generator  the {@link JsonGenerator}
-     * @param marshaller the {@link Marshaller}
-     * @throws IOException should writing fail
-     */
-    public void write(final Parameter parameter,
-                      final Type valueType,
-                      final Object value,
-                      final JsonGenerator generator,
-                      final Marshaller marshaller)
-        throws IOException {
-
-        if (value == null) {
-            generator.writeNull();
-        }
-        else if (value instanceof Marshalled<?> marshalledValue) {
-            write(marshalledValue, generator);
-        }
-        else {
-            final var valueClass = Introspection.getClassFromType(valueType)
-                .orElseThrow(() -> new IOException("Failed to determine Class of [" + valueType + "]"
-                    + " to write parameter [" + parameter.name() + "]"));
-
-            // attempt to locate a Transformer for the value
-            final var optionalTransformer = getTransformer(valueClass);
-
-            if (optionalTransformer.isPresent()) {
-                final var transformer = optionalTransformer.orElseThrow();
-
-                final var transformedValue = transformer.transform(marshaller, value);
-
-                if (Objects.equals(transformedValue, value)) {
-                    // as no transformation occurred, we can't write the value (we couldn't before this!)
-                    throw new IOException("Failed to transform parameter [" + parameter.name() + "]"
-                        + " with value [" + value + "]"
-                        + " of type [" + value.getClass() + "]"
-                        + " into a different value that can be written");
-                }
-                write(parameter, transformer.targetClass(), transformedValue, generator, marshaller);
-            }
-            else {
-                // attempt to use a Codec
-                final var optionalCodec = getCodec(valueType);
-
-                if (optionalCodec.isPresent()) {
-                    optionalCodec.orElseThrow()
-                        .write(this, parameter, value, generator, marshaller);
-                }
-                else if (this.schemaFactory.isMarshallable(valueClass)) {
-                    final var marshalledValue = marshaller.marshal(value);
-                    write(marshalledValue, generator);
-                }
-                else {
-                    // when the type is Object, an Interface or Abstract, attempt to use the concrete value type
-                    if (valueClass == Object.class
-                        || valueClass.isInterface()
-                        || Modifier.isAbstract(valueClass.getModifiers())) {
-
-                        // write out the concrete value so the reader can read it
-                        generator.writeStartObject();
-                        try {
-                            generator.writeFieldName("type");
-                            generator.writeString(value.getClass().getName());
-                            generator.writeFieldName("value");
-                            write(parameter, value.getClass(), value, generator, marshaller);
-                        }
-                        finally {
-                            generator.writeEndObject();
-                        }
-                    }
-                    else {
-                        // TODO: it may be possible there is a transformer or codec for value.getClass()
-                        // in which case we should try that too?
-
-                        throw new IOException("Failed to write parameter [" + parameter.name() + "]"
-                            + " with value [" + value + "]"
-                            + " of type [" + valueClass + "]"
-                            + " as no suitable Transformer, Codec or @Marshal-able type was found");
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Reads a {@link Marshalled} {@link Object} using the provided {@link JsonParser} and {@link Marshaller}.
-     *
-     * @param parser     the {@link JsonParser}
-     * @param marshaller the {@link Marshaller}
-     * @param <T>        the type of {@link Marshalled} {@link Object}
-     * @return the {@link Marshalled} {@link Object}
-     * @throws IOException should an exception occur
-     */
     @SuppressWarnings("unchecked")
-    public <T> Marshalled<T> read(final JsonParser parser,
-                                  final Marshaller marshaller)
-        throws IOException {
+    private <T> Marshalled<T> decodeMarshalled(final JsonObject json, final Marshaller marshaller) {
+        final var typeName = json.get(TYPE_FIELD).asString().value();
+        final Class<?> typeClass = loadClass(typeName, null);
 
-        Objects.requireNonNull(parser, "The JsonParser must not be null");
-        Objects.requireNonNull(schemaFactory, "The SchemaFactory must not be null");
-
-        // ensure there's a current token from which to read the Marshalled
-        // (by default a newly created JsonParser may not have read any tokens!)
-        if (parser.currentToken() == null) {
-            parser.nextToken();
-        }
-
-        if (!parser.isExpectedStartObjectToken()) {
-            throw new IOException("Failed to read Marshalled Object at " + parser.currentLocation());
-        }
-
-        // skip the start of the start of the JsonObject Token
-        parser.clearCurrentToken();
-
-        // parse the class of type to unmarshal (from which we can then determine the available unmarshalling schemas)
-        final var typeField = parser.nextFieldName();
-        if (!typeField.equals(TYPE_FIELD_NAME)) {
-            throw new IOException("Expected " + TYPE_FIELD_NAME + " field defined at " + parser.currentLocation());
-        }
-
-        final var typeName = parser.nextTextValue();
-        if (typeName == null) {
-            throw new IOException("Expected " + TYPE_FIELD_NAME + " field value at " + parser.currentLocation());
-        }
-
-        final Class<?> typeClass;
-        try {
-            typeClass = Class.forName(typeName);
-        }
-        catch (final ClassNotFoundException e) {
-            throw new IOException("Failed to load class " + typeName + " to read at " + parser.currentLocation(), e);
-        }
-
-        // determine the Schemas, their Parameters and corresponding Out values that are candidates for unmarshalling
         final var schemas = this.schemaFactory.getUnmarshallingSchemas(typeClass)
             .map(schema -> Pair.of(
                 schema,
                 schema.parameters().stream()
-                    .collect(Collectors.toMap(
-                        Parameter::name,
-                        parameter -> Pair.of(parameter, Out.empty())))))
+                    .collect(Collectors.toMap(Parameter::name, p -> Pair.of(p, Out.empty())))))
             .collect(Collectors.toCollection(ArrayList::new));
 
         if (schemas.isEmpty()) {
-            throw new IOException("No schemas are defined for type " + typeName + " at " + parser.currentLocation());
+            throw new IllegalStateException("No schemas defined for type: " + typeName);
         }
 
-        // process the fields
-        while (parser.nextToken() != JsonToken.END_OBJECT) {
-            final var parameterName = parser.currentName();
+        for (final var entry : json.members().entrySet()) {
+            final var fieldName = entry.getKey();
+            if (TYPE_FIELD.equals(fieldName)) {
+                continue;
+            }
+            final var fieldValue = entry.getValue();
 
-            // skip the field name token to advance to the possible value
-            parser.nextToken();
-
-            // remove the Schemas that don't have such a named parameter
-            schemas.removeIf(pair -> !pair.second().containsKey(parameterName));
+            schemas.removeIf(pair -> !pair.second().containsKey(fieldName));
 
             if (schemas.isEmpty()) {
-                throw new IOException("Failed to locate schema to support unmarshalling the type " + typeName + " at "
-                    + parser.currentLocation());
+                throw new IllegalStateException("No schema supports field '" + fieldName + "' for type " + typeName);
             }
 
-            // attempt to use the first available schema's first parameter type to read the value
-            final var parameter = schemas.getFirst()
-                .second()
-                .get(parameterName)
-                .first();
+            final var parameter = schemas.getFirst().second().get(fieldName).first();
+            final var decoded = decode(parameter, parameter.type(), fieldValue, marshaller);
 
-            final var value = read(parameter, parameter.type(), parser, marshaller);
-
-            // update the remaining candidate schemas with the parameter value
-            schemas.forEach(schema -> {
-                final var argument = schema.second().get(parameterName);
-                argument.second().set(value);
-            });
+            schemas.forEach(pair -> pair.second().get(fieldName).second().set(decoded));
         }
 
-        // find the first schema with completed set of arguments
-        var optionalSchemaValues = schemas.stream()
-            .filter(pair -> pair.second().values().stream()
-                .map(Pair::second)
-                .allMatch(Out::isPresent))
+        var optionalMatch = schemas.stream()
+            .filter(pair -> pair.second().values().stream().map(Pair::second).allMatch(Out::isPresent))
             .findFirst();
 
-        if (optionalSchemaValues.isEmpty()) {
-            // attempt to complete missing values using ConditionalCodecs
-            optionalSchemaValues = schemas.stream()
+        if (optionalMatch.isEmpty()) {
+            optionalMatch = schemas.stream()
                 .filter(pair -> pair.second().values().stream()
-                    .map(triple -> Triple.of(triple.second(), triple.first().type(),
-                        triple.second().isEmpty() ? null : triple.second().get()))
-                    .allMatch(triple -> {
-                        // skip the parameter when the value is present
-                        if (triple.first().isPresent()) {
+                    .allMatch(entry -> {
+                        if (entry.second().isPresent()) {
                             return true;
                         }
-
-                        // attempt to use a ConditionalCodec for the parameter to provide a default value
-                        final var codec = getCodec(triple.second());
-
+                        final var codec = getCodec(entry.first().type());
                         codec.filter(ConditionalCodec.class::isInstance)
                             .map(ConditionalCodec.class::cast)
-                            .ifPresent(conditionalCodec -> triple.first().set(conditionalCodec.defaultValue()));
-
-                        return triple.first().isPresent();
+                            .ifPresent(cc -> entry.second().set(cc.defaultValue()));
+                        return entry.second().isPresent();
                     }))
                 .findFirst();
         }
 
-        final var schemaValues = optionalSchemaValues
-            .orElseThrow(() -> new IOException(
-                "Failed to parse required values for type " + typeName + " at " + parser.currentLocation()));
+        final var match = optionalMatch
+            .orElseThrow(() -> new IllegalStateException("Failed to decode required fields for type " + typeName));
 
-        // ensure the order of the values is the same order as the schema parameters
-        final var values = Streamable.of(schemaValues.first().parameters().stream()
-            .map(parameter -> schemaValues.second().get(parameter.name()).second().orElse(null)));
+        final var values = Streamable.of(match.first().parameters().stream()
+            .map(p -> match.second().get(p.name()).second().orElse(null)));
 
-        // establish a Marshalled representation using the schema and captured values
         return new Marshalled<T>() {
             @Override
             @SuppressWarnings("unchecked")
             public Schema<T> schema() {
-                return (Schema<T>) schemaValues.first();
+                return (Schema<T>) match.first();
             }
 
             @Override
@@ -448,143 +428,13 @@ public class JsonTransport
         };
     }
 
-    /**
-     * Reads a {@link Marshalled} {@link Object} using the provided {@link JsonParser} and a default {@link Marshaller}.
-     *
-     * @param parser the {@link JsonParser}
-     * @param <T>    the type of {@link Marshalled} {@link Object}
-     * @return the {@link Marshalled} {@link Object}
-     * @throws IOException should an exception occur
-     */
-    public <T> Marshalled<T> read(final JsonParser parser)
-        throws IOException {
-
-        return read(parser, this.schemaFactory.newMarshaller());
-    }
-
-    /**
-     * Read the specified {@link Type} of {@link Parameter} value, which may be different from the
-     * {@link Parameter#type()} due to transformation, using the {@link Codec}s known to the {@link Transport}
-     * with the provided {@link JsonParser}, further transforming the value as needed.
-     *
-     * @param parameter  the {@link Parameter}
-     * @param type       the {@link Type} of value
-     * @param parser     the {@link JsonParser}
-     * @param marshaller the {@link Marshaller}
-     * @return the read value
-     * @throws IOException should writing fail
-     */
-    @SuppressWarnings("unchecked")
-    public <T> T read(final Parameter parameter,
-                      final Type type,
-                      final JsonParser parser,
-                      final Marshaller marshaller)
-        throws IOException {
-
-        if (parser.getCurrentToken() == JsonToken.VALUE_NULL) {
-            parser.clearCurrentToken();
-            return null;
+    private Class<?> loadClass(final String name, final Parameter parameter) {
+        try {
+            return Class.forName(name);
         }
-
-        // determine if there is a Transformer to use for the type
-        final var optionalTransformer = getTransformer(type);
-
-        if (optionalTransformer.isPresent()) {
-            final var transformer = optionalTransformer.get();
-            final var readValue = read(parameter, transformer.targetClass(), parser, marshaller);
-            final var transformedValue = transformer.reform(marshaller, parameter.type(), readValue);
-
-            if (Objects.equals(transformedValue, readValue)) {
-                throw new IOException("Failed to transform Parameter [" + parameter.name() + "]"
-                    + " with value [" + readValue + "]"
-                    + " into type [" + type + "]");
-            }
-            return (T) transformedValue;
-        }
-        else {
-            // determine the initially expected readable class based on the type of value
-            final var readableClass = Introspection.getClassFromType(type)
-                .orElseThrow(() -> new IOException("Failed to determine a class of value for Parameter ["
-                    + parameter.name() + "] of type [" + type + "]"
-                    + " at " + parser.currentLocation()));
-
-            // determine if there is a Codec to use for the type
-            final var optionalCodec = getCodec(type);
-
-            if (optionalCodec.isPresent()) {
-                return (T) optionalCodec.orElseThrow()
-                    .read(this, parameter, parser, marshaller);
-            }
-            else if (Marshalled.class.isAssignableFrom(readableClass)) {
-                return (T) read(parser, marshaller);
-            }
-            else if (marshaller.isMarshallable(readableClass)) {
-                final var marshalled = read(parser, marshaller);
-                return (T) marshaller.unmarshal(marshalled);
-            }
-            else {
-                // when the type is Object, an Interface or Abstract, attempt to use the concrete value type
-                if (readableClass == Object.class
-                    || readableClass.isInterface()
-                    || Modifier.isAbstract(readableClass.getModifiers())) {
-
-                    if (parser.getCurrentToken() == JsonToken.VALUE_NULL) {
-                        parser.clearCurrentToken();
-                        return null;
-                    }
-                    else if (parser.isExpectedStartObjectToken()) {
-                        parser.nextToken();
-
-                        // Expect that this object will be serialized with the 'type'
-                        // field first. If it is not, then we cannot know what type to
-                        // pass into the transport to parse the value.
-                        if (!parser.getText().equals("type")) {
-                            throw new IOException("Expected 'type' field name, but found ["
-                                + parser.getText() + "] for ["
-                                + parameter.name() + "] of type [" + parameter.type() + "]"
-                                + " at " + parser.currentLocation());
-                        }
-
-                        parser.nextToken();
-                        final var typeName = parser.getText();
-
-                        try {
-                            final var concreteType = Class.forName(typeName);
-
-                            parser.nextToken();
-                            if (!parser.getText().equals("value")) {
-                                throw new IOException("Expected 'value' field name, but found ["
-                                    + parser.getText() + "] for ["
-                                    + parameter.name() + "] of type [" + parameter.type() + "]"
-                                    + " at " + parser.currentLocation());
-                            }
-                            parser.nextToken();
-
-                            final var value = read(parameter, concreteType, parser, marshaller);
-
-                            // At this point we are still inside the serialized object, so we need to advance
-                            // to the end of the object for the parsing to continue properly.
-                            parser.nextToken();
-                            return (T) value;
-                        }
-                        catch (final ClassNotFoundException e) {
-                            throw new IOException("Failed to load class [" + typeName + "] for ["
-                                + parameter.name() + "] of type [" + parameter.type() + "]"
-                                + " at " + parser.currentLocation(), e);
-                        }
-                    }
-                    else {
-                        throw new IOException("Expected a JsonObject for ["
-                            + parameter.name() + "] of type [" + parameter.type() + "]"
-                            + " at " + parser.currentLocation());
-                    }
-                }
-                else {
-                    throw new IOException("Failed to determine a Transformer, Codec or @Marshal-able for ["
-                        + parameter.name() + "] of type [" + parameter.type() + "]"
-                        + " at " + parser.currentLocation());
-                }
-            }
+        catch (final ClassNotFoundException e) {
+            final var context = parameter == null ? "" : " for parameter [" + parameter.name() + "]";
+            throw new IllegalStateException("Failed to load class [" + name + "]" + context, e);
         }
     }
 }

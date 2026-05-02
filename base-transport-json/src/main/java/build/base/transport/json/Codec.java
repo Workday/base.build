@@ -9,9 +9,9 @@ package build.base.transport.json;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,12 +20,9 @@ package build.base.transport.json;
  * #L%
  */
 
+import build.base.json.JsonValue;
 import build.base.marshalling.Marshaller;
 import build.base.marshalling.Parameter;
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.JsonParser;
-
-import java.io.IOException;
 
 /**
  * A JSON <a href="https://en.wikipedia.org/wiki/Codec">Codec</a> for a specific type of value.
@@ -44,35 +41,30 @@ public interface Codec<T> {
     Class<?> codecClass();
 
     /**
-     * Writes the specified {@link Parameter} value using the provided {@link JsonGenerator}.
+     * Encodes the specified value as a {@link JsonValue}.
      *
      * @param transport  the {@link JsonTransport}
      * @param parameter  the {@link Parameter}
-     * @param value      the value to write
-     * @param generator  the {@link JsonGenerator}
+     * @param value      the value to encode
      * @param marshaller the {@link Marshaller}
-     * @throws IOException should writing fail
+     * @return the encoded {@link JsonValue}
      */
-    void write(JsonTransport transport,
-               Parameter parameter,
-               T value,
-               JsonGenerator generator,
-               Marshaller marshaller)
-        throws IOException;
+    JsonValue encode(JsonTransport transport,
+                     Parameter parameter,
+                     T value,
+                     Marshaller marshaller);
 
     /**
-     * Reads the specified {@link Parameter} value using the provided the {@link JsonParser}.
+     * Decodes a value of type {@code T} from the provided {@link JsonValue}.
      *
      * @param transport  the {@link JsonTransport}
      * @param parameter  the {@link Parameter}
-     * @param parser     the {@link JsonParser}
+     * @param value      the {@link JsonValue} to decode (never absent; may be {@link build.base.json.JsonNull})
      * @param marshaller the {@link Marshaller}
-     * @return the value
-     * @throws IOException should reading fail
+     * @return the decoded value
      */
-    T read(JsonTransport transport,
-           Parameter parameter,
-           JsonParser parser,
-           Marshaller marshaller)
-        throws IOException;
+    T decode(JsonTransport transport,
+             Parameter parameter,
+             JsonValue value,
+             Marshaller marshaller);
 }

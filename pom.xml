@@ -67,7 +67,6 @@
 
         <!-- Module Dependency Versions -->
         <assertj.version>3.27.7</assertj.version>
-        <jackson-core.version>2.21.2</jackson-core.version>
         <junit.version>6.0.3</junit.version>
         <jakarta-inject.version>2.0.1</jakarta-inject.version>
         <jakarta-el-api.version>6.0.1</jakarta-el-api.version>
@@ -273,11 +272,6 @@
             </dependency>
 
             <!-- Third-party -->
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-core</artifactId>
-                <version>${jackson-core.version}</version>
-            </dependency>
             <dependency>
                 <groupId>jakarta.el</groupId>
                 <artifactId>jakarta.el-api</artifactId>
