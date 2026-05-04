@@ -4,13 +4,13 @@
 
 `base` is a **Java 25 multi-module Maven library** (Workday, Inc., Apache 2.0). It is organized into 26 JPMS modules covering configuration, marshalling, JSON transport, reactive flow, composite traversal, retryable operations, telemetry, CLI parsing, I/O, networking, graph algorithms, version parsing, and more. All modules share the `build.base.*` package namespace.
 
-**Stack:** Java 25, Maven, JPMS (module system), Jackson Core (JSON), Jakarta EL 6.0 (native implementation), AssertJ + JUnit 5 Jupiter (tests).
+**Stack:** Java 25, Maven, JPMS (module system), Jakarta EL 6.0 (native implementation), AssertJ + JUnit 6 (tests).
 **Build:** `./mvnw clean install` | Publishes to **Maven Central** via GitHub Actions (`.github/workflows/release.yml` for releases, `publish-snapshot.yml` for snapshots). Requires GPG signing and `MAVEN_CENTRAL_USERNAME`/`MAVEN_CENTRAL_PASSWORD` secrets.
 
 **Structure:**
 - `base-foundation` — root utilities (Lazy, Capture, Exceptional, Streamable, iterators, matching DSL, etc.)
 - `base-configuration` / `base-option` / `base-expression` / `base-commandline` — type-safe config + CLI
-- `base-marshalling` / `base-transport` / `base-transport-json` — annotation-driven serialization to JSON
+- `base-marshalling` / `base-transport` / `base-json` / `base-transport-json` — annotation-driven serialization to JSON; `base-json` is an immutable JSON value tree (JEP 8344154-aligned) used as the wire format
 - `base-flow` — custom reactive Publish/Subscribe
 - `base-query` / `base-mereology` — object indexing + part-whole hierarchy traversal
 - `base-graph` — immutable directed/undirected graph library with traversal, ordering, paths, SCC, and transitive reduction
