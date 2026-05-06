@@ -4,6 +4,7 @@ import build.base.assertion.IteratorAssert;
 import build.base.foundation.stream.Streams;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -692,6 +693,38 @@ class CompositeTests {
                 assertThat(list.get(4).object()).isEqualTo("Direct");
                 assertThat(list.get(4).composite()).contains(composite);
             });
+    }
+
+    /**
+     * Ensure {@link Composite#composition()} does not hang or recurse infinitely when the composite graph contains a self-loop.
+     */
+    @Test
+    void shouldHandleSelfLoopCycleInComposition() {
+        final var parts = new ArrayList<>();
+        final var composite = Composites.of(parts);
+        parts.add("Hello");
+        parts.add(composite); // cycle: composite contains itself
+
+        // composite is emitted as an element (it is a part of itself) but not recursed into again
+        assertThat(composite.composition()).containsExactly(composite, "Hello");
+    }
+
+    /**
+     * Ensure {@link Composite#composition()} does not hang or recurse infinitely when the composite graph contains a mutual cycle.
+     */
+    @Test
+    void shouldHandleMutualCycleInComposition() {
+        final var partsA = new ArrayList<>();
+        final var partsB = new ArrayList<>();
+        final var a = Composites.of(partsA);
+        final var b = Composites.of(partsB);
+        partsA.add("Hello");
+        partsA.add(b);   // A → B
+        partsB.add("World");
+        partsB.add(a);   // B → A (cycle)
+
+        // a is emitted as an element of b (cycle back-edge), but not recursed into again
+        assertThat(a.composition()).containsExactly(b, a, "World", "Hello");
     }
 
     /**
