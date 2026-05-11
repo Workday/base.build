@@ -7,6 +7,7 @@ import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 
 /**
  * Compatibility tests for {@link Index} implementations.
@@ -221,6 +222,102 @@ public interface IndexCompatibilityTests {
     }
 
     /**
+     * Ensure {@code isEqualTo(null)} works on the fallback (non-{@link Indexable}) path.
+     *
+     * <p>{@link NullFallbackColorful#COLOR} is not {@link Indexable}, so the query bypasses the index
+     * and evaluates the predicate against the raw stream. Before the fix, {@code Objects.equals(null, NULL_OBJECT)}
+     * returned {@code false}, so the object was never returned.
+     */
+    @Test
+    default void shouldFindObjectWithNullValueOnFallbackPath() {
+        final var index = createIndex();
+
+        final var colorful = new NullFallbackColorful();
+        index.add(NullFallbackColorful.class, colorful);
+
+        assertThat(index.match(NullFallbackColorful.class)
+            .where(NullFallbackColorful.COLOR)
+            .isEqualTo(null)
+            .findFirst())
+            .contains(colorful);
+    }
+
+    /**
+     * Ensure a {@link Unique} {@link Indexable} field is indexed and queried correctly.
+     */
+    @Test
+    default void shouldIndexAndQueryUniqueIndexableField() {
+        final var index = createIndex();
+
+        index.index(new UniqueColorful(Color.RED));
+        index.index(new UniqueColorful(Color.GREEN));
+
+        assertThat(index.match(UniqueColorful.class)
+            .where(UniqueColorful.COLOR)
+            .isEqualTo(Color.RED)
+            .findFirst())
+            .contains(new UniqueColorful(Color.RED));
+
+        assertThat(index.match(UniqueColorful.class)
+            .where(UniqueColorful.COLOR)
+            .isEqualTo(Color.BLUE)
+            .findFirst())
+            .isEmpty();
+    }
+
+    /**
+     * Ensure a {@link Unique} {@link Indexable} field can be unindexed.
+     */
+    @Test
+    default void shouldUnindexUniqueIndexableField() {
+        final var index = createIndex();
+
+        index.index(new UniqueColorful(Color.RED));
+        index.unindex(new UniqueColorful(Color.RED));
+
+        assertThat(index.match(UniqueColorful.class)
+            .where(UniqueColorful.COLOR)
+            .isEqualTo(Color.RED)
+            .findFirst())
+            .isEmpty();
+    }
+
+    /**
+     * Ensure indexing two objects with the same key on a {@link Unique} field throws {@link IllegalStateException}.
+     */
+    @Test
+    default void shouldRejectDuplicateKeyOnUniqueIndexableField() {
+        final var index = createIndex();
+
+        index.index(new UniqueColorful(Color.RED));
+
+        assertThrowsExactly(IllegalStateException.class,
+            () -> index.index(new UniqueColorful(Color.RED)));
+    }
+
+    /**
+     * Ensure {@link Index#add} rejects a {@code null} class or value.
+     */
+    @Test
+    default void shouldRejectNullArgumentsInAdd() {
+        final var index = createIndex();
+
+        assertThrowsExactly(NullPointerException.class, () -> index.add(null, Color.RED));
+        assertThrowsExactly(NullPointerException.class, () -> index.add(Color.class, null));
+    }
+
+    /**
+     * Ensure {@link Index#remove} rejects a {@code null} class or value.
+     */
+    @Test
+    default void shouldRejectNullArgumentsInRemove() {
+        final var index = createIndex();
+
+        assertThrowsExactly(NullPointerException.class, () -> index.remove(null, Color.RED));
+        assertThrowsExactly(NullPointerException.class, () -> index.remove(Color.class, null));
+    }
+
+    /**
      * Ensure a non-{@link Indexable} {@link Object}, which throws an {@link Exception} when indexed, can't be indexed.
      */
     @Test
@@ -321,6 +418,18 @@ public interface IndexCompatibilityTests {
     }
 
     /**
+     * A class whose {@link #COLOR} function is intentionally <em>not</em> {@link Indexable}, forcing queries to
+     * evaluate against the fallback stream rather than the index.  The function always returns {@code null}.
+     */
+    record NullFallbackColorful() {
+
+        /**
+         * A non-{@link Indexable} function that always returns {@code null}.
+         */
+        public static final Function<NullFallbackColorful, Color> COLOR = _ -> null;
+    }
+
+    /**
      * A simple {@code record} for testing purposes that is not indexable.
      *
      * @param color the {@link Color}
@@ -332,5 +441,17 @@ public interface IndexCompatibilityTests {
 
         @Indexable
         public static final Function<NotIndexable, Color> COLOR = NotIndexable::color;
+    }
+
+    /**
+     * A {@code record} whose {@link #COLOR} function is both {@link Indexable} and {@link Unique}.
+     *
+     * @param color the {@link Color}
+     */
+    record UniqueColorful(Color color) {
+
+        @Indexable
+        @Unique
+        public static final Function<UniqueColorful, Color> COLOR = UniqueColorful::color;
     }
 }

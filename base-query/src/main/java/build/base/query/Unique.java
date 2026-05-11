@@ -24,16 +24,23 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import java.lang.reflect.Method;
+import java.lang.reflect.Field;
+import java.util.function.Function;
 
 /**
- * Specifies that the result of a {@link Indexable} {@link Method} is unique within the context of a {@link Object}.
+ * Specifies that the key produced by an {@link Indexable} {@code public} {@code static} {@code final} {@link Function}
+ * {@link Field} is unique within the {@link Index} — i.e. no two indexed objects will ever produce the same key for
+ * that function.
+ *
+ * <p>When present alongside {@link Indexable} on a {@link Function} field, the index stores a direct
+ * {@code key → object} mapping instead of {@code key → Set<object>}, making {@code isEqualTo} lookups O(1) and
+ * enforcing uniqueness at index time.
  *
  * @author brian.oliver
  * @since Jun-2025
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.METHOD)
+@Target(ElementType.FIELD)
 public @interface Unique {
 
 }

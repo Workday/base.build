@@ -27,6 +27,8 @@ import build.base.foundation.tuple.Pair;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
@@ -79,12 +81,36 @@ public abstract class AbstractHeapBasedIndex implements Index {
             Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>>>> objectsByClassIndexableFunctionAndValue;
 
     /**
+     * The uniquely-indexed {@link Object}s by {@link Class}, {@link Indexable} {@link Unique} {@link Function}, and
+     * extracted key.
+     * <p>
+     * The {@link Pair} value holds:
+     * <ul>
+     *   <li>first — a reverse-index mapping each indexed {@link Object} to the key extracted at index time</li>
+     *   <li>second — a forward-index mapping each extracted key to the single {@link Object} indexed with that key</li>
+     * </ul>
+     */
+    private final ConcurrentHashMap<
+        Class<?>,
+        ConcurrentHashMap<
+            Function<Object, Object>,
+            Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Object>>>> uniqueObjectsByClassFunctionAndKey;
+
+    /**
+     * The {@link Indexable} {@link Unique} {@code public} {@code static} {@code final} {@link Function}s defined by
+     * {@link Field}s per known {@link Class}.
+     */
+    private final Memoizer<Class<?>, Streamable<Field>> uniqueIndexableFunctionFieldsByClass;
+
+    /**
      * Constructs an empty {@link AbstractHeapBasedIndex}.
      */
     protected AbstractHeapBasedIndex() {
         this.objectByClass = new ConcurrentHashMap<>();
         this.objectsByClassIndexableFunctionAndValue = new ConcurrentHashMap<>();
         this.indexableFunctionFieldsByClass = new Memoizer<>(AbstractHeapBasedIndex::getIndexableFunctionFields);
+        this.uniqueObjectsByClassFunctionAndKey = new ConcurrentHashMap<>();
+        this.uniqueIndexableFunctionFieldsByClass = new Memoizer<>(AbstractHeapBasedIndex::getUniqueIndexableFunctionFields);
     }
 
 
@@ -152,6 +178,53 @@ public abstract class AbstractHeapBasedIndex implements Index {
                         });
                     } catch (final IllegalAccessException e) {
                         throw new RuntimeException("Failed to index [" + objectClass.getName() + "] as the field [" + field.getName() + "] could not be accessed", e);
+                    }
+
+                    return functions;
+                }));
+
+        // index the values produced by public static final @Indexable @Unique Function fields
+        this.uniqueIndexableFunctionFieldsByClass
+            .compute(objectClass)
+            .forEach(field -> this.uniqueObjectsByClassFunctionAndKey
+                .compute(objectClass, (_, existingFunctions) -> {
+                    final var functions = existingFunctions == null
+                        ? new ConcurrentHashMap<Function<Object, Object>, Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Object>>>()
+                        : existingFunctions;
+
+                    try {
+                        field.setAccessible(true);
+                        @SuppressWarnings("unchecked") final var function = (Function<Object, Object>) field.get(null);
+
+                        functions.compute(function, (_, existingPair) -> {
+                            final var pair = existingPair == null
+                                ? Pair.of(new ConcurrentHashMap<>(), new ConcurrentHashMap<Object, Object>())
+                                : existingPair;
+
+                            try {
+                                final var value = function.apply(object);
+                                final var indexableValue = value == null ? NULL_OBJECT : value;
+
+                                // enforce uniqueness: two different objects must not share a key
+                                final var displaced = pair.second().putIfAbsent(indexableValue, object);
+                                if (displaced != null && displaced != object) {
+                                    throw new IllegalStateException(
+                                        "Unique key violation: key [" + value + "] produced by [" + field.getName()
+                                            + "] on [" + objectClass.getName() + "] is already held by [" + displaced + "]");
+                                }
+
+                                // record the reverse mapping: object → extracted key
+                                pair.first().put(object, indexableValue);
+
+                                return pair;
+                            } catch (final IllegalStateException e) {
+                                throw e;
+                            } catch (final Throwable e) {
+                                throw new UnsupportedOperationException("Failed to index [" + objectClass.getName() + "] as the unique function [" + field.getName() + "] failed to extract a value from the object", e);
+                            }
+                        });
+                    } catch (final IllegalAccessException e) {
+                        throw new RuntimeException("Failed to index [" + objectClass.getName() + "] as the unique field [" + field.getName() + "] could not be accessed", e);
                     }
 
                     return functions;
@@ -225,37 +298,68 @@ public abstract class AbstractHeapBasedIndex implements Index {
                         : existingFunctions; // return the functions if not empty
                 }));
 
+        // unindex the values produced by public static final @Indexable @Unique Function fields
+        this.uniqueIndexableFunctionFieldsByClass
+            .compute(objectClass)
+            .forEach(field -> this.uniqueObjectsByClassFunctionAndKey
+                .compute(objectClass, (_, existingFunctions) -> {
+                    if (existingFunctions == null) {
+                        return null;
+                    }
+                    try {
+                        field.setAccessible(true);
+                        @SuppressWarnings("unchecked") final var function = (Function<Object, Object>) field.get(null);
+
+                        existingFunctions.compute(function, (_, existingPair) -> {
+                            if (existingPair == null) {
+                                return null;
+                            }
+                            // look up the key from the reverse map — no function invocation needed
+                            final var indexableKey = existingPair.first().remove(object);
+                            if (indexableKey != null) {
+                                existingPair.second().remove(indexableKey);
+                            }
+                            return existingPair.second().isEmpty() ? null : existingPair;
+                        });
+                    } catch (final IllegalAccessException e) {
+                        throw new RuntimeException("Failed to unindex [" + objectClass.getName() + "] as the unique field [" + field.getName() + "] could not be accessed", e);
+                    }
+
+                    return existingFunctions.isEmpty() ? null : existingFunctions;
+                }));
     }
 
 
     @Override
     public <T> void add(final Class<T> valueClass, final T value) {
-        if (valueClass != null && value != null) {
-            this.objectByClass.compute(valueClass, (_, existing) -> {
-                final var objects = existing == null
-                    ? ConcurrentHashMap.newKeySet()
-                    : existing;
+        Objects.requireNonNull(valueClass, "The value class must not be null");
+        Objects.requireNonNull(value, "The value must not be null");
 
-                objects.add(value);
-                return objects;
-            });
-        }
+        this.objectByClass.compute(valueClass, (_, existing) -> {
+            final var objects = existing == null
+                ? ConcurrentHashMap.newKeySet()
+                : existing;
+
+            objects.add(value);
+            return objects;
+        });
     }
 
     @Override
     public <T> void remove(final Class<T> valueClass, final T value) {
-        if (valueClass != null && value != null) {
-            this.objectByClass.compute(valueClass, (_, existing) -> {
-                if (existing == null) {
-                    return null; // nothing to remove
-                } else {
-                    existing.remove(value);
-                    return existing.isEmpty()
-                        ? null
-                        : existing; // return null if empty
-                }
-            });
-        }
+        Objects.requireNonNull(valueClass, "The value class must not be null");
+        Objects.requireNonNull(value, "The value must not be null");
+
+        this.objectByClass.compute(valueClass, (_, existing) -> {
+            if (existing == null) {
+                return null;
+            } else {
+                existing.remove(value);
+                return existing.isEmpty()
+                    ? null
+                    : existing;
+            }
+        });
     }
 
     /**
@@ -294,6 +398,24 @@ public abstract class AbstractHeapBasedIndex implements Index {
     protected static Streamable<Field> getIndexableFunctionFields(final Class<?> indexableClass) {
         return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
             .filter(field -> field.getAnnotation(Indexable.class) != null
+                && field.getAnnotation(Unique.class) == null
+                && Modifier.isPublic(field.getModifiers())
+                && Modifier.isStatic(field.getModifiers())
+                && Modifier.isFinal(field.getModifiers())
+                && Function.class.isAssignableFrom(field.getType())));
+    }
+
+    /**
+     * Obtains the {@code public static final} {@link Function} {@link Field}s that are annotated as both
+     * {@link Indexable} and {@link Unique} for the specified {@link Class}.
+     *
+     * @param indexableClass the {@link Class} of queryable
+     * @return the {@link Streamable} of {@link Field}s annotated with both {@link Indexable} and {@link Unique}
+     */
+    protected static Streamable<Field> getUniqueIndexableFunctionFields(final Class<?> indexableClass) {
+        return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
+            .filter(field -> field.getAnnotation(Indexable.class) != null
+                && field.getAnnotation(Unique.class) != null
                 && Modifier.isPublic(field.getModifiers())
                 && Modifier.isStatic(field.getModifiers())
                 && Modifier.isFinal(field.getModifiers())
@@ -350,27 +472,38 @@ public abstract class AbstractHeapBasedIndex implements Index {
          * @return the {@link Stream} of {@link Object}s
          */
         Stream<Q> stream(final Scope scope) {
-            // attempt to use the indexed Objects by Class
             final var objects = AbstractHeapBasedIndex.this.objectByClass.get(this.objectClass);
 
-            if (objects != null) {
-                return objects.stream()
+            if (scope == Scope.Indexed) {
+                return objects == null
+                    ? Stream.empty()
+                    : objects.stream().map(this.objectClass::cast);
+            }
+
+            // For Direct/BreadthFirst/DepthFirst: traversal is additive, not a fallback
+            final var traversedByClass = this.index.traverse(this.objectClass, scope);
+            final Stream<Q> traversalStream;
+
+            if (traversedByClass != null && traversedByClass.hasNext()) {
+                traversalStream = StreamSupport.stream(Spliterators.spliteratorUnknownSize(traversedByClass, 0), false);
+            } else {
+                final var traversedAll = this.index.traverse(scope);
+                traversalStream = traversedAll == null || !traversedAll.hasNext()
+                    ? Stream.empty()
+                    : StreamSupport.stream(Spliterators.spliteratorUnknownSize(traversedAll, 0), false)
+                    .filter(this.objectClass::isInstance)
                     .map(this.objectClass::cast);
             }
 
-            final var unindexedObjectsByClass = this.index.traverse(this.objectClass, scope);
-
-            if (unindexedObjectsByClass != null && unindexedObjectsByClass.hasNext()) {
-                return StreamSupport.stream(Spliterators.spliteratorUnknownSize(unindexedObjectsByClass, 0), false);
+            if (objects == null) {
+                return traversalStream;
             }
 
-            final var unindexedObjects = this.index.traverse(scope);
-
-            return unindexedObjects == null || !unindexedObjects.hasNext()
-                ? Stream.empty()
-                : StreamSupport.stream(Spliterators.spliteratorUnknownSize(unindexedObjects, 0), false)
-                .filter(this.objectClass::isInstance)
-                .map(this.objectClass::cast);
+            // Concatenate indexed + traversal, deduplicated by identity
+            final Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+            return Stream.concat(
+                objects.stream().map(this.objectClass::cast).filter(seen::add),
+                traversalStream.filter(seen::add));
         }
 
         @Override
@@ -479,7 +612,7 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
             this.where = Objects.requireNonNull(where, "The Where must not be null");
             this.value = Objects.requireNonNull(value, "The Value must not be null");
-            this.scope = Scope.Direct;
+            this.scope = where.select.scope;
         }
 
         @Override
@@ -490,7 +623,22 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
         @Override
         public Stream<Q> findAll() {
-            // first attempt to use the function indexed values
+            // check the unique index first — O(1) direct lookup
+            final var uniqueByFunction = AbstractHeapBasedIndex.this
+                .uniqueObjectsByClassFunctionAndKey.get(this.where.select.objectClass);
+
+            if (uniqueByFunction != null) {
+                final var pair = uniqueByFunction.get(this.where.function);
+
+                if (pair != null) {
+                    final var object = pair.second().get(this.value);
+                    return object == null
+                        ? Stream.empty()
+                        : Stream.of(this.where.select.objectClass.cast(object));
+                }
+            }
+
+            // then attempt to use the non-unique function indexed values
             final var objectsByFunction = AbstractHeapBasedIndex.this
                 .objectsByClassIndexableFunctionAndValue.get(this.where.select.objectClass);
 
@@ -508,7 +656,7 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
             // failing that, use the objects provided by the query
             return this.where.select.stream(this.scope)
-                .filter(queryable -> Objects.equals(this.where.function.apply(queryable), this.value));
+                .filter(queryable -> Objects.equals(this.where.nonNull(this.where.function.apply(queryable)), this.value));
         }
     }
 
@@ -548,7 +696,7 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
             this.where = Objects.requireNonNull(where, "The Where must not be null");
             this.value = Objects.requireNonNull(value, "The Value must not be null");
-            this.scope = Scope.Direct;
+            this.scope = where.select.scope;
         }
 
         @Override
@@ -559,7 +707,21 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
         @Override
         public Stream<Q> findAll() {
-            // first attempt to use the function indexed values
+            // check the unique index first
+            final var uniqueByFunction = AbstractHeapBasedIndex.this
+                .uniqueObjectsByClassFunctionAndKey.get(this.where.select.objectClass);
+
+            if (uniqueByFunction != null) {
+                final var pair = uniqueByFunction.get(this.where.function);
+
+                if (pair != null) {
+                    return pair.second().entrySet().stream()
+                        .filter(entry -> !Objects.equals(entry.getKey(), this.value))
+                        .map(entry -> this.where.select.objectClass.cast(entry.getValue()));
+                }
+            }
+
+            // then attempt to use the non-unique function indexed values
             final var objectsByFunction = AbstractHeapBasedIndex.this
                 .objectsByClassIndexableFunctionAndValue.get(this.where.select.objectClass);
 
@@ -617,7 +779,7 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
             this.where = Objects.requireNonNull(where, "The Where must not be null");
             this.predicate = Objects.requireNonNull(predicate, "The Predicate must not be null");
-            this.scope = Scope.Direct;
+            this.scope = where.select.scope;
         }
 
         @Override
@@ -629,7 +791,22 @@ public abstract class AbstractHeapBasedIndex implements Index {
         @Override
         @SuppressWarnings("unchecked")
         public Stream<Q> findAll() {
-            // first attempt to use the function indexed values
+            // check the unique index first
+            final var uniqueByFunction = AbstractHeapBasedIndex.this
+                .uniqueObjectsByClassFunctionAndKey.get(this.where.select.objectClass);
+
+            if (uniqueByFunction != null) {
+                final var pair = uniqueByFunction.get(this.where.function);
+
+                if (pair != null) {
+                    return pair.second().entrySet().stream()
+                        .filter(entry -> this.predicate
+                            .test((V) (entry.getKey() == NULL_OBJECT ? null : entry.getKey())))
+                        .map(entry -> this.where.select.objectClass.cast(entry.getValue()));
+                }
+            }
+
+            // then attempt to use the non-unique function indexed values
             final var objectsByFunction = AbstractHeapBasedIndex.this
                 .objectsByClassIndexableFunctionAndValue.get(this.where.select.objectClass);
 
