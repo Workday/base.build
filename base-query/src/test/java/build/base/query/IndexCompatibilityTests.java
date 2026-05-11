@@ -318,6 +318,28 @@ public interface IndexCompatibilityTests {
     }
 
     /**
+     * Ensure {@link Index#reindex} reflects value changes after mutation.
+     */
+    @Test
+    default void shouldReflectMutatedValueAfterReindex() {
+        final var index = createIndex();
+
+        final var colorful = new MutableColorful(Color.RED);
+        index.index(colorful);
+
+        assertThat(index.match(MutableColorful.class).where(MutableColorful.COLOR).isEqualTo(Color.RED).findFirst())
+            .contains(colorful);
+
+        colorful.setColor(Color.GREEN);
+        index.reindex(colorful);
+
+        assertThat(index.match(MutableColorful.class).where(MutableColorful.COLOR).isEqualTo(Color.RED).findFirst())
+            .isEmpty();
+        assertThat(index.match(MutableColorful.class).where(MutableColorful.COLOR).isEqualTo(Color.GREEN).findFirst())
+            .contains(colorful);
+    }
+
+    /**
      * Ensure a non-{@link Indexable} {@link Object}, which throws an {@link Exception} when indexed, can't be indexed.
      */
     @Test
