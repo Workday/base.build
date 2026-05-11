@@ -66,11 +66,17 @@ public interface Traversal<T, B extends Traversal<T, B>>
 
     /**
      * Creates a new {@link Traversal} specifically for the specified {@link Class} of {@link Object}s.
+     * <p>
+     * This method must be called <em>before</em> {@link #filter(Predicate)} and {@link #abort(Predicate)}.
+     * Because it replaces the element type entirely, any previously-set predicate or abort filter would be
+     * silently invalidated, so an {@link IllegalStateException} is thrown if either has been set.
+     * The correct order is: {@code filter(MyClass.class).strategy(...).filter(predicate).abort(predicate)}.
      *
      * @param <C>  the type of {@link Object}
      * @param <I>  the type of {@link Traversal}
      * @param type the {@link Class} of {@link Object}
      * @return a new {@link Traversal} for the specified {@link Class} of {@link Object}
+     * @throws IllegalStateException if a {@link #filter(Predicate)} or {@link #abort(Predicate)} has already been set
      * @see #filter(Predicate)
      */
     <C, I extends Traversal<C, I>> I filter(Class<C> type);
