@@ -56,6 +56,21 @@ public interface Index extends Queryable {
     void unindex(Object object);
 
     /**
+     * Re-indexes the specified {@link Object} by first unindexing it and then re-indexing it.
+     * <p>
+     * Use this after mutating an object whose indexed values may have changed, so that the
+     * forward and reverse maps reflect the new state.
+     *
+     * @param object the {@link Object} to re-index
+     * @see #index(Object)
+     * @see #unindex(Object)
+     */
+    default void reindex(final Object object) {
+        unindex(object);
+        index(object);
+    }
+
+    /**
      * Adds the specified value {@link Object} to the index so that is may be returned when the specified {@link Class}
      * is queried or matched.
      *

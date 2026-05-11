@@ -843,6 +843,40 @@ class CompositeTests {
     }
 
     /**
+     * Ensure {@link Composites#verify} returns an empty list when every reachable {@link Composite} has parts.
+     */
+    @Test
+    void shouldFindNoSuspectCompositesWhenAllHaveParts() {
+        final var leaf = Composites.of("Hello");
+        final var root = Composites.of(leaf, "World");
+
+        assertThat(Composites.verify(root, c -> true)).isEmpty();
+    }
+
+    /**
+     * Ensure {@link Composites#verify} flags a reachable {@link Composite} that exposes no parts.
+     */
+    @Test
+    void shouldFindEmptyNestedCompositeAsSuspect() {
+        final var empty = Composite.empty();
+        final var root = Composites.of(empty, "Hello");
+
+        assertThat(Composites.verify(root, c -> true))
+            .containsExactly(empty);
+    }
+
+    /**
+     * Ensure {@link Composites#verify} respects the predicate: composites rejected by it are not reported.
+     */
+    @Test
+    void shouldRespectSuspectPredicateInVerify() {
+        final var empty = Composite.empty();
+        final var root = Composites.of(empty, "Hello");
+
+        assertThat(Composites.verify(root, c -> c != empty)).isEmpty();
+    }
+
+    /**
      * Ensure the hierarchy in {@link Entity}s shows the complete path from root to element.
      */
     @Test

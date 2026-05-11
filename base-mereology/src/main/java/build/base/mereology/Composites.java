@@ -24,7 +24,9 @@ import build.base.foundation.Arrays;
 import build.base.foundation.iterator.Iterators;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * Provides mechanisms to work with {@link Composite}s.
@@ -106,5 +108,23 @@ public class Composites {
      */
     public static <V> Composite valuesOf(final Map<?, V> map) {
         return of(map.values());
+    }
+
+    /**
+     * Walks the transitive composition of {@code root} and returns every reachable {@link Composite}
+     * that matches {@code suspect} and exposes no parts — a signal that
+     * {@link Composite#iterator(Class)} is not correctly implemented for that node.
+     *
+     * @param root    the root {@link Composite} to walk, included reflexively
+     * @param suspect identifies which {@link Composite}s are expected to have parts
+     * @return the list of suspect empty {@link Composite}s; empty when none are found
+     */
+    public static List<Composite> verify(final Composite root, final Predicate<? super Composite> suspect) {
+        return root.traverse(Composite.class)
+            .reflexive(true)
+            .stream()
+            .filter(suspect)
+            .filter(c -> !c.iterator(Object.class).hasNext())
+            .toList();
     }
 }
