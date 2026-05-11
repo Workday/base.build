@@ -340,6 +340,45 @@ public interface IndexCompatibilityTests {
     }
 
     /**
+     * Ensure {@link Match#findAll()} returns instances indexed under subclasses when the query class is a supertype.
+     */
+    @Test
+    default void shouldFindSubclassInstancesWhenQueryingBySupertype() {
+        final var index = createIndex();
+        final var circle = new Circle("red");
+        final var square = new Square("blue");
+
+        index.add(Circle.class, circle);
+        index.add(Square.class, square);
+
+        assertThat(index.match(Shape.class).findAll().toList())
+            .containsExactlyInAnyOrder(circle, square);
+    }
+
+    /**
+     * Ensure {@link Scope#Indexed} also returns subclass instances when querying by supertype.
+     */
+    @Test
+    default void shouldFindSubclassInstancesWithIndexedScopeWhenQueryingBySupertype() {
+        final var index = createIndex();
+        final var circle = new Circle("red");
+
+        index.add(Circle.class, circle);
+
+        assertThat(index.match(Shape.class).scope(Scope.Indexed).findAll().toList())
+            .containsExactly(circle);
+    }
+
+    /**
+     * A simple marker interface for supertype-query tests.
+     */
+    interface Shape {}
+
+    record Circle(String color) implements Shape {}
+
+    record Square(String color) implements Shape {}
+
+    /**
      * Ensure a non-{@link Indexable} {@link Object}, which throws an {@link Exception} when indexed, can't be indexed.
      */
     @Test

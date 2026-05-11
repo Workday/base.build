@@ -466,18 +466,25 @@ public abstract class AbstractHeapBasedIndex implements Index {
         }
 
         /**
+         * Returns a {@link Stream} of all objects in the index whose concrete class is assignable to
+         * {@link #objectClass}, drawn from {@code objectByClass} across all matching keys.
+         */
+        private Stream<Q> indexedStream() {
+            return AbstractHeapBasedIndex.this.objectByClass.entrySet().stream()
+                .filter(e -> this.objectClass.isAssignableFrom(e.getKey()))
+                .flatMap(e -> e.getValue().stream())
+                .map(this.objectClass::cast);
+        }
+
+        /**
          * Obtain the {@link Stream} of {@link Object}s of the specified {@link Class}.
          *
          * @param scope the {@link Scope} for obtaining {@link Object}s to query
          * @return the {@link Stream} of {@link Object}s
          */
         Stream<Q> stream(final Scope scope) {
-            final var objects = AbstractHeapBasedIndex.this.objectByClass.get(this.objectClass);
-
             if (scope == Scope.Indexed) {
-                return objects == null
-                    ? Stream.empty()
-                    : objects.stream().map(this.objectClass::cast);
+                return indexedStream();
             }
 
             // For Direct/BreadthFirst/DepthFirst: traversal is additive, not a fallback
@@ -495,14 +502,10 @@ public abstract class AbstractHeapBasedIndex implements Index {
                     .map(this.objectClass::cast);
             }
 
-            if (objects == null) {
-                return traversalStream;
-            }
-
-            // Concatenate indexed + traversal, deduplicated by identity
+            // Concatenate indexed (all assignable subclasses) + traversal, deduplicated by identity
             final Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
             return Stream.concat(
-                objects.stream().map(this.objectClass::cast).filter(seen::add),
+                indexedStream().filter(seen::add),
                 traversalStream.filter(seen::add));
         }
 
