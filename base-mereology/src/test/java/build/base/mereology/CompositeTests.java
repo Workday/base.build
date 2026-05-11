@@ -843,6 +843,23 @@ class CompositeTests {
     }
 
     /**
+     * Ensure a {@link Composite} reachable via two paths in a diamond DAG is visited only once.
+     */
+    @Test
+    void shouldVisitSharedCompositeOnceInDiamondDag() {
+        final var shared = Composites.of("deep");
+        final var left = Composites.of(shared);
+        final var right = Composites.of(shared);
+        final var root = Composites.of(left, right);
+
+        assertThat(root.composition(Composite.class))
+            .containsExactlyInAnyOrder(left, right, shared, shared);
+
+        assertThat(root.composition(String.class))
+            .containsExactly("deep");
+    }
+
+    /**
      * Ensure {@link Composites#verify} returns an empty list when every reachable {@link Composite} has parts.
      */
     @Test
