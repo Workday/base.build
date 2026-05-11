@@ -22,6 +22,7 @@ package build.base.mereology;
 
 import build.base.foundation.stream.Streamable;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -91,12 +92,12 @@ public interface Entity<T> {
     }
 
     /**
-     * Determines if the {@link Entity} {@link Object} is an <i>atom</i>, meaning it is not a {@link Composite}.
+     * Determines if the {@link Entity} {@link Object} is an <i>atom</i>, meaning it has no proper parts.
      *
-     * @return {@code true} if the {@link Object} is an <i>atom</i>, {@code false} otherwise
+     * @return {@code true} if the {@link Object} has no proper parts, {@code false} otherwise
      */
     default boolean isAtom() {
-        return !(object() instanceof Composite);
+        return !(object() instanceof Composite c) || !c.iterator(Object.class).hasNext();
     }
 
     /**
@@ -154,9 +155,13 @@ public interface Entity<T> {
 
         final var optionalComposite = Optional.ofNullable(composite);
 
-        return composite == null
-            ? boundary(object)
-            : new Entity<>() {
+        if (composite == null) {
+            return boundary(object);
+        }
+
+        final Streamable<Composite> hierarchyStreamable = Streamable.of(composite);
+
+        return new Entity<>() {
             @Override
             public T object() {
                 return object;
@@ -173,8 +178,13 @@ public interface Entity<T> {
             }
 
             @Override
+            public int distance() {
+                return 1;
+            }
+
+            @Override
             public Streamable<Composite> hierarchy() {
-                return Streamable.of(composite);
+                return hierarchyStreamable;
             }
         };
     }
@@ -192,11 +202,17 @@ public interface Entity<T> {
     static <T> Entity<T> of(final T object, final Stream<Composite> hierarchy) {
         Objects.requireNonNull(object, "The object must not be null");
 
-        final var streamable = Streamable.of(hierarchy);
+        // parents: innermost (direct) composite first, boundary last
+        final List<Composite> parents = hierarchy == null ? List.of() : hierarchy.toList();
 
-        return streamable.isEmpty()
-            ? boundary(object)
-            : new Entity<>() {
+        if (parents.isEmpty()) {
+            return boundary(object);
+        }
+
+        final int depth = parents.size();
+        final Streamable<Composite> hierarchyStreamable = Streamable.reversed(parents.stream());
+
+        return new Entity<>() {
 
             @Override
             public T object() {
@@ -205,8 +221,7 @@ public interface Entity<T> {
 
             @Override
             public Optional<Composite> composite() {
-                return streamable.stream()
-                    .findFirst();
+                return Optional.of(parents.get(0));
             }
 
             @Override
@@ -215,8 +230,13 @@ public interface Entity<T> {
             }
 
             @Override
+            public int distance() {
+                return depth;
+            }
+
+            @Override
             public Streamable<Composite> hierarchy() {
-                return Streamable.reversed(streamable.stream());
+                return hierarchyStreamable;
             }
         };
     }

@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests for {@link Composite}s.
@@ -725,6 +726,120 @@ class CompositeTests {
 
         // a is emitted as an element of b (cycle back-edge), but not recursed into again
         assertThat(a.composition()).containsExactly(b, a, "World", "Hello");
+    }
+
+    /**
+     * Ensure {@link Entity#distance()} returns 1 for an {@link Entity} created with a single {@link Composite},
+     * and that repeated calls to {@link Entity#hierarchy()} return the same content.
+     */
+    @Test
+    void shouldReturnDistanceOfOneForSingleCompositeEntity() {
+        final var composite = Composites.of("part");
+        final var entity = Entity.of("object", composite);
+
+        assertThat(entity.distance()).isEqualTo(1);
+        assertThat(entity.composite()).contains(composite);
+        assertThat(entity.hierarchy().stream()).containsExactly(composite);
+
+        // repeated calls must return the same results
+        assertThat(entity.distance()).isEqualTo(1);
+        assertThat(entity.hierarchy().stream()).containsExactly(composite);
+    }
+
+    /**
+     * Ensure {@link Entity#distance()} equals the hierarchy depth for an {@link Entity} created from a
+     * {@link Stream}, and that {@link Entity#composite()} and {@link Entity#hierarchy()} return consistent
+     * results across repeated calls (no stream-reuse hazard).
+     */
+    @Test
+    void shouldReturnCorrectDistanceAndHierarchyFromStreamFactory() {
+        final var root = Composites.of("a");
+        final var mid = Composites.of("b");
+        final var leaf = Composites.of("c");
+
+        // stream is innermost-first: leaf → mid → root
+        final var entity = Entity.of("object", Stream.of(leaf, mid, root));
+
+        assertThat(entity.distance()).isEqualTo(3);
+        assertThat(entity.composite()).contains(leaf);
+
+        // hierarchy() must be boundary-first: root → mid → leaf
+        assertThat(entity.hierarchy().stream()).containsExactly(root, mid, leaf);
+
+        // repeated calls must return the same results (guards against stream-reuse regression)
+        assertThat(entity.distance()).isEqualTo(3);
+        assertThat(entity.composite()).contains(leaf);
+        assertThat(entity.hierarchy().stream()).containsExactly(root, mid, leaf);
+    }
+
+    /**
+     * Ensure a {@link Strategy#Direct} {@link Hierarchical} traversal produces the same elements on repeated
+     * calls to {@link Hierarchical#stream()} — guards against the iterator being created eagerly and exhausted
+     * on first use.
+     */
+    @Test
+    void shouldReturnConsistentResultsOnRepeatedDirectHierarchicalStream() {
+        final var composite = Composites.of("Hello", "World");
+        final var hierarchical = composite.traverse()
+            .strategy(Strategy.Direct)
+            .hierarchical();
+
+        assertThat(hierarchical.stream().map(Entity::object)).containsExactly("Hello", "World");
+        assertThat(hierarchical.stream().map(Entity::object)).containsExactly("Hello", "World");
+    }
+
+    /**
+     * Ensure a reflexive {@link Strategy#Direct} {@link Hierarchical} traversal also produces consistent results
+     * on repeated calls.
+     */
+    @Test
+    void shouldReturnConsistentResultsOnRepeatedReflexiveDirectHierarchicalStream() {
+        final var composite = Composites.of("Hello");
+        final var hierarchical = composite.traverse()
+            .strategy(Strategy.Direct)
+            .reflexive(true)
+            .hierarchical();
+
+        assertThat(hierarchical.stream().map(Entity::object)).containsExactly(composite, "Hello");
+        assertThat(hierarchical.stream().map(Entity::object)).containsExactly(composite, "Hello");
+    }
+
+    /**
+     * Ensure {@link Traversal#filter(Class)} throws when a {@link Predicate} filter has already been set,
+     * preventing the silent drop of the predicate.
+     */
+    @Test
+    void shouldThrowWhenFilterByClassCalledAfterFilterByPredicate() {
+        final var composite = Composites.of("Hello", 42);
+
+        assertThatThrownBy(() -> composite.traverse()
+            .filter(e -> e instanceof String)
+            .filter(String.class))
+            .isInstanceOf(IllegalStateException.class);
+    }
+
+    /**
+     * Ensure {@link Traversal#filter(Class)} throws when an abort predicate has already been set.
+     */
+    @Test
+    void shouldThrowWhenFilterByClassCalledAfterAbort() {
+        final var composite = Composites.of("Hello", 42);
+
+        assertThatThrownBy(() -> composite.traverse()
+            .abort(e -> false)
+            .filter(String.class))
+            .isInstanceOf(IllegalStateException.class);
+    }
+
+    /**
+     * Ensure {@link Entity#isAtom()} is structural: a non-{@link Composite} is always an atom,
+     * a non-empty {@link Composite} is not, and an empty {@link Composite} is.
+     */
+    @Test
+    void shouldDetermineAtomStructurally() {
+        assertThat(Entity.boundary("hello").isAtom()).isTrue();
+        assertThat(Entity.boundary(Composites.of("part")).isAtom()).isFalse();
+        assertThat(Entity.boundary(Composite.empty()).isAtom()).isTrue();
     }
 
     /**

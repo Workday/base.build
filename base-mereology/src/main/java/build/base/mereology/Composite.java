@@ -31,6 +31,12 @@ import java.util.stream.Stream;
  * <p>
  * The concepts and terminology used here is based on those defined by the science of
  * <a href="https://en.wikipedia.org/wiki/Mereology">Mereology</a>.
+ * <p>
+ * <b>Cycle detection.</b> Transitive traversal ({@link Strategy#DepthFirst}, {@link Strategy#BreadthFirst}) tracks
+ * visited {@link Composite}s by <em>identity</em> ({@code ==}), not by {@link Object#equals(Object)}.  This means two
+ * structurally-equal but distinct {@link Composite} instances are treated as separate nodes and both are visited.
+ * It also means that implementing {@link Object#equals(Object)} on a {@link Composite} to express structural equality
+ * has no effect on cycle detection; only object identity determines whether a node has already been visited.
  *
  * @author brian.oliver
  * @since Sep-2025
@@ -99,6 +105,12 @@ public interface Composite {
      * Obtains an {@link Iterator} of the <i>direct</i> <i>parts</i> of the {@link Composite} that are assignable to
      * the specified {@link Class}.  Should all types of <i>direct</i> <i>parts</i> be required, {@link Object}.class
      * should be specified.
+     * <p>
+     * <b>Implementor note.</b> During transitive traversal the framework calls both
+     * {@code iterator(Composite.class)} and {@code iterator(elementClass)} and de-duplicates the results by identity
+     * before visiting them.  Implementors therefore do <em>not</em> need to ensure that those two iterators are
+     * disjoint: a part that is both a {@link Composite} and an instance of the element class (e.g. a type that
+     * implements {@link Composite}) will be yielded exactly once regardless.
      *
      * @param <T> the type of the {@link Class}
      * @return an {@link Iterator} of the assignable <i>direct</i> <i>parts</i>

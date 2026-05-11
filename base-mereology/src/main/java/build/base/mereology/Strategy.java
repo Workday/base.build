@@ -36,11 +36,17 @@ public enum Strategy {
 
     /**
      * Transitively traverse <i>parts</i> of a {@link Composite} using a <i>depth-first</i> strategy.
+     * <p>
+     * Visited {@link Composite}s are tracked by identity ({@code ==}) so that cycles in the graph are broken
+     * without requiring {@link Object#equals(Object)} to be meaningful on {@link Composite} implementations.
      */
     DepthFirst,
 
     /**
      * Transitively traverse <i>parts</i> of a {@link Composite} using a <i>breadth-first</i> strategy.
+     * <p>
+     * Visited {@link Composite}s are tracked by identity ({@code ==}) so that cycles in the graph are broken
+     * without requiring {@link Object#equals(Object)} to be meaningful on {@link Composite} implementations.
      */
     BreadthFirst;
 }

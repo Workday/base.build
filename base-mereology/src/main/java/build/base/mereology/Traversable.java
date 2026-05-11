@@ -116,6 +116,16 @@ class Traversable<T>
     @Override
     @SuppressWarnings("unchecked")
     public <C, I extends Traversal<C, I>> I filter(final Class<C> type) {
+        if (this.filter != Predicates.always()) {
+            throw new IllegalStateException(
+                "filter(Class) cannot be called after filter(Predicate) — the predicate would be silently dropped; " +
+                "call filter(Class) first, then filter(Predicate)");
+        }
+        if (this.abort != Predicates.never()) {
+            throw new IllegalStateException(
+                "filter(Class) cannot be called after abort(Predicate) — the abort predicate would be silently dropped; " +
+                "call filter(Class) first, then abort(Predicate)");
+        }
         return (I) new Traversable<>(this.composite, type)
             .reflexive(this.reflexive)
             .strategy(this.strategy)
@@ -146,20 +156,24 @@ class Traversable<T>
                     ((element instanceof Composite c && !this.exclude.test(c)) || (!(element instanceof Composite)))
                         && this.filter.test(element);
 
-                // establish the direct part iterator with a mapping to Parthood
-                final var iterator = this.exclude.test(this.composite)
-                    ? Iterators.<Entity<T>>empty()
-                    : Iterators.map(
-                    Iterators.filter(this.composite.iterator(this.elementClass), include),
-                    object -> Entity.of(object, Traversable.this.composite));
+                final boolean excludeRoot = this.exclude.test(this.composite);
+                final boolean includeReflexive = !excludeRoot
+                    && this.reflexive
+                    && this.elementClass.isInstance(this.composite);
 
-                // include the composite if reflexive
-                yield this.reflexive && this.elementClass.isInstance(this.composite) && !this.exclude.test(this.composite)
-                    ? new ParthoodTraversal<>(
-                    () -> Iterators.of(
-                        Iterators.of(Entity.boundary(Traversable.this.elementClass.cast(Traversable.this.composite))),
-                        iterator))
-                    : new ParthoodTraversal<>(() -> iterator);
+                yield new ParthoodTraversal<>(() -> {
+                    if (excludeRoot) {
+                        return Iterators.empty();
+                    }
+                    final var partIterator = Iterators.map(
+                        Iterators.filter(Traversable.this.composite.iterator(Traversable.this.elementClass), include),
+                        object -> Entity.of(object, Traversable.this.composite));
+                    return includeReflexive
+                        ? Iterators.of(
+                            Iterators.of(Entity.boundary(Traversable.this.elementClass.cast(Traversable.this.composite))),
+                            partIterator)
+                        : partIterator;
+                });
             }
 
             case DepthFirst -> new ParthoodTraversal<>(
