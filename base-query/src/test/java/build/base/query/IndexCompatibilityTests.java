@@ -3,7 +3,10 @@ package build.base.query;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.Function;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -160,7 +163,7 @@ public interface IndexCompatibilityTests {
             .findFirst())
             .isEmpty();
     }
-    
+
     /**
      * Ensure an object can be unindexed even when its state has changed since being indexed.
      */
@@ -372,11 +375,172 @@ public interface IndexCompatibilityTests {
     /**
      * A simple marker interface for supertype-query tests.
      */
-    interface Shape {}
+    interface Shape {
+    }
 
-    record Circle(String color) implements Shape {}
+    record Circle(String color) implements Shape {
+    }
 
-    record Square(String color) implements Shape {}
+    record Square(String color) implements Shape {
+    }
+
+    /**
+     * Ensure {@link Terminal#findAll()} returns all objects that share the same indexed value.
+     */
+    @Test
+    default void shouldReturnAllObjectsWithSameIndexedValue() {
+        final var index = createIndex();
+        final var red1 = new MutableColorful(Color.RED);
+        final var red2 = new MutableColorful(Color.RED);
+
+        index.index(red1);
+        index.index(red2);
+
+        assertThat(index.match(MutableColorful.class)
+            .where(MutableColorful.COLOR)
+            .isEqualTo(Color.RED)
+            .findAll()
+            .toList()
+        ).containsExactlyInAnyOrder(red1, red2);
+    }
+
+    /**
+     * Ensure {@link Condition#matches(java.util.function.Predicate)} works on the indexed path when the extracted
+     * value is {@code null} — indexed path.
+     */
+    @Test
+    default void shouldMatchObjectWithNullValueUsingPredicateOnIndexedPath() {
+        final var index = createIndex();
+        final var colorful = new NullColorful();
+        index.index(colorful);
+
+        assertThat(index.match(NullColorful.class)
+            .where(NullColorful.COLOR)
+            .matches(c -> c == null)
+            .findFirst()
+        ).contains(colorful);
+        assertThat(index.match(NullColorful.class)
+            .where(NullColorful.COLOR)
+            .matches(c -> c != null)
+            .findFirst()
+        ).isEmpty();
+    }
+
+    /**
+     * Ensure {@link Condition#matches(java.util.function.Predicate)} works on the fallback path when the extracted
+     * value is {@code null} — fallback path.
+     */
+    @Test
+    default void shouldMatchObjectWithNullValueUsingPredicateOnFallbackPath() {
+        final var index = createIndex();
+        final var colorful = new NullFallbackColorful();
+        index.add(NullFallbackColorful.class, colorful);
+
+        assertThat(index.match(NullFallbackColorful.class)
+            .where(NullFallbackColorful.COLOR)
+            .matches(c -> c == null)
+            .findFirst()
+        ).contains(colorful);
+        assertThat(index.match(NullFallbackColorful.class)
+            .where(NullFallbackColorful.COLOR)
+            .matches(c -> c != null)
+            .findFirst()
+        ).isEmpty();
+    }
+
+    /**
+     * Ensure {@link Condition#isNotEqualTo} returns all objects not matching the specified value.
+     */
+    @Test
+    default void shouldReturnObjectsNotEqualToValue() {
+        final var index = createIndex();
+        index.index(Color.RED);
+        index.index(Color.GREEN);
+        index.index(Color.BLUE);
+
+        assertThat(index.match(Color.class)
+            .where(Color.NAME)
+            .isNotEqualTo("RED")
+            .findAll()
+            .toList()
+        ).containsExactlyInAnyOrder(Color.GREEN, Color.BLUE);
+    }
+
+    /**
+     * Ensure {@link Condition#isNotEqualTo(Object) isNotEqualTo(null)} excludes objects whose indexed value is
+     * {@code null} and includes those with a non-{@code null} value (T4, null case).
+     */
+    @Test
+    default void shouldReturnObjectsNotEqualToNull() {
+        final var index = createIndex();
+        final var withNull = new NullColorful();
+        index.index(withNull);
+
+        assertThat(index.match(NullColorful.class)
+            .where(NullColorful.COLOR)
+            .isNotEqualTo(null)
+            .findFirst()
+        ).isEmpty();
+    }
+
+    /**
+     * Ensure concurrent {@link Index#index} and {@link Index#unindex} calls do not throw or corrupt state.
+     */
+    @Test
+    default void shouldHandleConcurrentIndexAndUnindex() throws InterruptedException {
+        final var index = createIndex();
+        final var latch = new CountDownLatch(1);
+        final var errors = new CopyOnWriteArrayList<Throwable>();
+
+        final Runnable task = () -> {
+            try {
+                latch.await();
+                for (int i = 0; i < 50; i++) {
+                    final var colorful = new MutableColorful(Color.RED);
+                    index.index(colorful);
+                    index.unindex(colorful);
+                }
+            } catch (final Throwable t) {
+                errors.add(t);
+            }
+        };
+
+        final var threads = IntStream.range(0, 8)
+            .mapToObj(_ -> new Thread(task))
+            .toList();
+
+        threads.forEach(Thread::start);
+        latch.countDown();
+        for (final var thread : threads) {
+            thread.join();
+        }
+
+        assertThat(errors).isEmpty();
+    }
+
+    /**
+     * Ensure the index does not retain stale entries after many index/unindex cycles.
+     */
+    @Test
+    default void shouldCleanUpEntriesAfterManyIndexUnindexCycles() {
+        final var index = createIndex();
+
+        for (int i = 0; i < 100; i++) {
+            final var colorful = new MutableColorful(Color.RED);
+            index.index(colorful);
+            index.unindex(colorful);
+        }
+
+        assertThat(index.match(MutableColorful.class)
+            .findAll()
+            .toList()
+        ).isEmpty();
+        assertThat(index.match(MutableColorful.class)
+            .where(MutableColorful.COLOR)
+            .isEqualTo(Color.RED)
+            .findFirst()
+        ).isEmpty();
+    }
 
     /**
      * Ensure a non-{@link Indexable} {@link Object}, which throws an {@link Exception} when indexed, can't be indexed.
