@@ -103,6 +103,12 @@ public abstract class AbstractHeapBasedIndex implements Index {
     private final Memoizer<Class<?>, Streamable<Field>> uniqueIndexableFunctionFieldsByClass;
 
     /**
+     * The {@link Indexable} {@link Dynamic} {@code public} {@code static} {@code final} {@link Function}s defined by
+     * {@link Field}s per known {@link Class} (includes both {@link Unique} and non-{@link Unique} fields).
+     */
+    private final Memoizer<Class<?>, Streamable<Field>> dynamicIndexableFunctionFieldsByClass;
+
+    /**
      * Constructs an empty {@link AbstractHeapBasedIndex}.
      */
     protected AbstractHeapBasedIndex() {
@@ -111,6 +117,7 @@ public abstract class AbstractHeapBasedIndex implements Index {
         this.indexableFunctionFieldsByClass = new Memoizer<>(AbstractHeapBasedIndex::getIndexableFunctionFields);
         this.uniqueObjectsByClassFunctionAndKey = new ConcurrentHashMap<>();
         this.uniqueIndexableFunctionFieldsByClass = new Memoizer<>(AbstractHeapBasedIndex::getUniqueIndexableFunctionFields);
+        this.dynamicIndexableFunctionFieldsByClass = new Memoizer<>(AbstractHeapBasedIndex::getDynamicIndexableFunctionFields);
     }
 
 
@@ -329,6 +336,118 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
 
     @Override
+    public void reindexDynamic(final Object object) {
+        final var objectClass = object.getClass();
+
+        this.dynamicIndexableFunctionFieldsByClass.compute(objectClass).forEach(field -> {
+            final boolean isUnique = field.getAnnotation(Unique.class) != null;
+
+            if (isUnique) {
+                this.uniqueObjectsByClassFunctionAndKey.compute(objectClass, (_, existingFunctions) -> {
+                    final var functions = existingFunctions == null
+                        ? new ConcurrentHashMap<Function<Object, Object>, Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Object>>>()
+                        : existingFunctions;
+
+                    try {
+                        field.setAccessible(true);
+                        @SuppressWarnings("unchecked") final var function = (Function<Object, Object>) field.get(null);
+
+                        functions.compute(function, (_, existingPair) -> {
+                            final var pair = existingPair == null
+                                ? Pair.of(new ConcurrentHashMap<>(), new ConcurrentHashMap<Object, Object>())
+                                : existingPair;
+
+                            // unindex old key using the reverse map — no function invocation needed
+                            final var oldKey = pair.first().remove(object);
+                            if (oldKey != null) {
+                                pair.second().remove(oldKey);
+                            }
+
+                            // re-index with the current value
+                            try {
+                                final var value = function.apply(object);
+                                final var newKey = value == null ? NULL_OBJECT : value;
+
+                                final var displaced = pair.second().putIfAbsent(newKey, object);
+                                if (displaced != null && displaced != object) {
+                                    throw new IllegalStateException(
+                                        "Unique key violation: key [" + value + "] produced by [" + field.getName()
+                                            + "] on [" + objectClass.getName() + "] is already held by [" + displaced + "]");
+                                }
+
+                                pair.first().put(object, newKey);
+                            } catch (final IllegalStateException e) {
+                                throw e;
+                            } catch (final Throwable e) {
+                                throw new UnsupportedOperationException("Failed to reindex [" + objectClass.getName() + "] as the unique function [" + field.getName() + "] failed to extract a value from the object", e);
+                            }
+
+                            return pair;
+                        });
+                    } catch (final IllegalAccessException e) {
+                        throw new RuntimeException("Failed to reindex [" + objectClass.getName() + "] as the unique field [" + field.getName() + "] could not be accessed", e);
+                    }
+
+                    return functions;
+                });
+            } else {
+                this.objectsByClassIndexableFunctionAndValue.compute(objectClass, (_, existingFunctions) -> {
+                    final var functions = existingFunctions == null
+                        ? new ConcurrentHashMap<Function<Object, Object>, Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>>>()
+                        : existingFunctions;
+
+                    try {
+                        field.setAccessible(true);
+                        @SuppressWarnings("unchecked") final var function = (Function<Object, Object>) field.get(null);
+
+                        functions.compute(function, (_, existingPair) -> {
+                            final var pair = existingPair == null
+                                ? Pair.of(new ConcurrentHashMap<>(), new ConcurrentHashMap<Object, Set<Object>>())
+                                : existingPair;
+
+                            // unindex old value using the reverse map — no function invocation needed
+                            final var oldValue = pair.first().remove(object);
+                            if (oldValue != null) {
+                                pair.second().compute(oldValue, (_, existingObjects) -> {
+                                    if (existingObjects == null) {
+                                        return null;
+                                    }
+                                    existingObjects.remove(object);
+                                    return existingObjects.isEmpty() ? null : existingObjects;
+                                });
+                            }
+
+                            // re-index with the current value
+                            try {
+                                final var value = function.apply(object);
+                                final var newValue = value == null ? NULL_OBJECT : value;
+
+                                pair.first().put(object, newValue);
+                                pair.second().compute(newValue, (_, existingObjects) -> {
+                                    final var objects = existingObjects == null
+                                        ? ConcurrentHashMap.newKeySet()
+                                        : existingObjects;
+                                    objects.add(object);
+                                    return objects;
+                                });
+                            } catch (final Throwable e) {
+                                throw new UnsupportedOperationException("Failed to reindex [" + objectClass.getName() + "] as the function [" + field.getName() + "] failed to extract a value from the object", e);
+                            }
+
+                            return pair;
+                        });
+                    } catch (final IllegalAccessException e) {
+                        throw new RuntimeException("Failed to reindex [" + objectClass.getName() + "] as the field [" + field.getName() + "] could not be accessed", e);
+                    }
+
+                    return functions;
+                });
+            }
+        });
+    }
+
+
+    @Override
     public <T> void add(final Class<T> valueClass, final T value) {
         Objects.requireNonNull(valueClass, "The value class must not be null");
         Objects.requireNonNull(value, "The value must not be null");
@@ -414,6 +533,23 @@ public abstract class AbstractHeapBasedIndex implements Index {
         return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
             .filter(field -> field.getAnnotation(Indexable.class) != null
                 && field.getAnnotation(Unique.class) != null
+                && Modifier.isPublic(field.getModifiers())
+                && Modifier.isStatic(field.getModifiers())
+                && Modifier.isFinal(field.getModifiers())
+                && Function.class.isAssignableFrom(field.getType())));
+    }
+
+    /**
+     * Obtains the {@code public static final} {@link Function} {@link Field}s that are annotated as both
+     * {@link Indexable} and {@link Dynamic} for the specified {@link Class} (includes {@link Unique} fields).
+     *
+     * @param indexableClass the {@link Class} of queryable
+     * @return the {@link Streamable} of {@link Field}s annotated with both {@link Indexable} and {@link Dynamic}
+     */
+    protected static Streamable<Field> getDynamicIndexableFunctionFields(final Class<?> indexableClass) {
+        return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
+            .filter(field -> field.getAnnotation(Indexable.class) != null
+                && field.getAnnotation(Dynamic.class) != null
                 && Modifier.isPublic(field.getModifiers())
                 && Modifier.isStatic(field.getModifiers())
                 && Modifier.isFinal(field.getModifiers())
