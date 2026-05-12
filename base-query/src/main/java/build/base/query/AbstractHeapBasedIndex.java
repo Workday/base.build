@@ -119,17 +119,17 @@ public abstract class AbstractHeapBasedIndex implements Index {
     public void index(final Object object) {
         final var objectClass = object.getClass();
 
-        // index the object itself if it is annotated with @Indexable
-        if (Introspection.hasDeclaredAnnotation(objectClass, Indexable.class)) {
-            this.objectByClass.compute(objectClass, (_, existing) -> {
-                final var objects = existing == null
-                    ? ConcurrentHashMap.newKeySet()
-                    : existing;
+        // always register the object in objectByClass — an @Indexable function field is sufficient
+        // to make the type a class-membership participant; type-level @Indexable remains accepted
+        // but is no longer required
+        this.objectByClass.compute(objectClass, (_, existing) -> {
+            final var objects = existing == null
+                ? ConcurrentHashMap.newKeySet()
+                : existing;
 
-                objects.add(object);
-                return objects;
-            });
-        }
+            objects.add(object);
+            return objects;
+        });
 
         // index the values produced by public static final @Indexable Function fields
         this.indexableFunctionFieldsByClass
@@ -235,19 +235,17 @@ public abstract class AbstractHeapBasedIndex implements Index {
     public void unindex(final Object object) {
         final var objectClass = object.getClass();
 
-        // unindex the object itself if it is annotated with @Indexable
-        if (Introspection.hasDeclaredAnnotation(objectClass, Indexable.class)) {
-            this.objectByClass.compute(objectClass, (_, existing) -> {
-                if (existing == null) {
-                    return null; // nothing to remove
-                } else {
-                    existing.remove(object);
-                    return existing.isEmpty()
-                        ? null
-                        : existing; // return null if empty
-                }
-            });
-        }
+        // always remove from objectByClass, symmetrical with index()
+        this.objectByClass.compute(objectClass, (_, existing) -> {
+            if (existing == null) {
+                return null;
+            } else {
+                existing.remove(object);
+                return existing.isEmpty()
+                    ? null
+                    : existing;
+            }
+        });
 
         // unindex the values produced by public static final @Indexable Function fields
         this.indexableFunctionFieldsByClass
