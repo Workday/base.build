@@ -647,6 +647,101 @@ public interface IndexCompatibilityTests {
             () -> index.index(new NotIndexable(Color.RED)));
     }
 
+    // ---- reindexDynamic
+
+    /**
+     * Ensure {@link Index#reindexDynamic} is a no-op for objects that have only stable (non-{@link Dynamic})
+     * {@link Indexable} functions — their index entries must be unchanged.
+     */
+    @Test
+    default void shouldLeaveStableEntriesUnchangedOnReindexDynamic() {
+        final var index = createIndex();
+
+        final var colorful = new Colorful(Color.RED);
+        index.index(colorful);
+
+        assertThat(index.match(Colorful.class).where(Colorful.COLOR).isEqualTo(Color.RED).findFirst())
+            .contains(colorful);
+
+        index.reindexDynamic(colorful);
+
+        assertThat(index.match(Colorful.class).where(Colorful.COLOR).isEqualTo(Color.RED).findFirst())
+            .contains(colorful);
+    }
+
+    /**
+     * Ensure {@link Index#reindexDynamic} updates the forward map for a {@link Dynamic} {@link Indexable} function
+     * after the object's state changes.
+     */
+    @Test
+    default void shouldReflectMutatedValueAfterReindexDynamic() {
+        final var index = createIndex();
+
+        final var colorful = new DynamicColorful(Color.RED);
+        index.index(colorful);
+
+        assertThat(index.match(DynamicColorful.class).where(DynamicColorful.COLOR).isEqualTo(Color.RED).findFirst())
+            .contains(colorful);
+
+        colorful.setColor(Color.GREEN);
+        index.reindexDynamic(colorful);
+
+        assertThat(index.match(DynamicColorful.class).where(DynamicColorful.COLOR).isEqualTo(Color.RED).findFirst())
+            .isEmpty();
+        assertThat(index.match(DynamicColorful.class).where(DynamicColorful.COLOR).isEqualTo(Color.GREEN).findFirst())
+            .contains(colorful);
+    }
+
+    /**
+     * Ensure {@link Index#reindexDynamic} updates only the {@link Dynamic} entry and leaves the stable entry
+     * untouched when an object has both stable and {@link Dynamic} {@link Indexable} functions.
+     */
+    @Test
+    default void shouldUpdateOnlyDynamicEntryAndLeaveStableEntryUnchangedOnReindexDynamic() {
+        final var index = createIndex();
+
+        final var colorful = new StableAndDynamicColorful("alpha", Color.RED);
+        index.index(colorful);
+
+        assertThat(index.match(StableAndDynamicColorful.class).where(StableAndDynamicColorful.NAME).isEqualTo("alpha").findFirst())
+            .contains(colorful);
+        assertThat(index.match(StableAndDynamicColorful.class).where(StableAndDynamicColorful.COLOR).isEqualTo(Color.RED).findFirst())
+            .contains(colorful);
+
+        colorful.setColor(Color.BLUE);
+        index.reindexDynamic(colorful);
+
+        assertThat(index.match(StableAndDynamicColorful.class).where(StableAndDynamicColorful.NAME).isEqualTo("alpha").findFirst())
+            .contains(colorful);
+        assertThat(index.match(StableAndDynamicColorful.class).where(StableAndDynamicColorful.COLOR).isEqualTo(Color.RED).findFirst())
+            .isEmpty();
+        assertThat(index.match(StableAndDynamicColorful.class).where(StableAndDynamicColorful.COLOR).isEqualTo(Color.BLUE).findFirst())
+            .contains(colorful);
+    }
+
+    /**
+     * Ensure {@link Index#reindexDynamic} correctly updates the unique map when a {@link Dynamic} {@link Unique}
+     * {@link Indexable} function's value changes.
+     */
+    @Test
+    default void shouldUpdateUniqueMapOnReindexDynamicForDynamicUniqueFunction() {
+        final var index = createIndex();
+
+        final var colorful = new DynamicUniqueColorful("key-A");
+        index.index(colorful);
+
+        assertThat(index.match(DynamicUniqueColorful.class).where(DynamicUniqueColorful.ID).isEqualTo("key-A").findFirst())
+            .contains(colorful);
+
+        colorful.setId("key-B");
+        index.reindexDynamic(colorful);
+
+        assertThat(index.match(DynamicUniqueColorful.class).where(DynamicUniqueColorful.ID).isEqualTo("key-A").findFirst())
+            .isEmpty();
+        assertThat(index.match(DynamicUniqueColorful.class).where(DynamicUniqueColorful.ID).isEqualTo("key-B").findFirst())
+            .contains(colorful);
+    }
+
     /**
      * A simple {@link Enum} for testing.
      */
@@ -772,5 +867,80 @@ public interface IndexCompatibilityTests {
         @Indexable
         @Unique
         public static final Function<UniqueColorful, Color> COLOR = UniqueColorful::color;
+    }
+
+    /**
+     * A mutable class with a {@link Dynamic} {@link Indexable} function, used to verify that
+     * {@link Index#reindexDynamic} updates the index after mutation.
+     */
+    class DynamicColorful {
+
+        @Indexable
+        @Dynamic
+        public static final Function<DynamicColorful, Color> COLOR = DynamicColorful::getColor;
+
+        private Color color;
+
+        DynamicColorful(final Color color) {
+            this.color = color;
+        }
+
+        public Color getColor() {
+            return this.color;
+        }
+
+        public void setColor(final Color color) {
+            this.color = color;
+        }
+    }
+
+    /**
+     * A mutable class with one stable and one {@link Dynamic} {@link Indexable} function.
+     */
+    class StableAndDynamicColorful {
+
+        @Indexable
+        public static final Function<StableAndDynamicColorful, String> NAME = o -> o.name;
+
+        @Indexable
+        @Dynamic
+        public static final Function<StableAndDynamicColorful, Color> COLOR = o -> o.color;
+
+        private final String name;
+        private Color color;
+
+        StableAndDynamicColorful(final String name, final Color color) {
+            this.name = name;
+            this.color = color;
+        }
+
+        public void setColor(final Color color) {
+            this.color = color;
+        }
+    }
+
+    /**
+     * A mutable class with a {@link Dynamic} {@link Unique} {@link Indexable} function.
+     */
+    class DynamicUniqueColorful {
+
+        @Indexable
+        @Unique
+        @Dynamic
+        public static final Function<DynamicUniqueColorful, String> ID = DynamicUniqueColorful::getId;
+
+        private String id;
+
+        DynamicUniqueColorful(final String id) {
+            this.id = id;
+        }
+
+        public String getId() {
+            return this.id;
+        }
+
+        public void setId(final String id) {
+            this.id = id;
+        }
     }
 }

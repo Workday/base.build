@@ -71,6 +71,24 @@ public interface Index extends Queryable {
     }
 
     /**
+     * Partially re-indexes the specified {@link Object} by updating only the index entries for
+     * {@link Indexable} {@link Dynamic} {@link java.util.function.Function} fields.
+     * <p>
+     * Use this after mutating state that is reflected by {@link Dynamic}-annotated functions, when stable
+     * (non-{@link Dynamic}) indexed values are known not to have changed. Stable index entries and
+     * class-level {@link Indexable} entries are left untouched.
+     * <p>
+     * Implementations that do not distinguish dynamic from stable fields fall back to a full {@link #reindex}.
+     *
+     * @param object the {@link Object} to partially re-index
+     * @see #reindex(Object)
+     * @see Dynamic
+     */
+    default void reindexDynamic(final Object object) {
+        reindex(object);
+    }
+
+    /**
      * Adds the specified value {@link Object} to the index so that is may be returned when the specified {@link Class}
      * is queried or matched.
      *
