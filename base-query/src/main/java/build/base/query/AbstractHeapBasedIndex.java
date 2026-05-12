@@ -624,35 +624,33 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
         @Override
         public Stream<Q> findAll() {
-            // check the unique index first — O(1) direct lookup
-            final var uniqueByFunction = AbstractHeapBasedIndex.this
-                .uniqueObjectsByClassFunctionAndKey.get(this.where.select.objectClass);
+            // check the unique index across all assignable classes
+            final var uniquePairs = AbstractHeapBasedIndex.this.uniqueObjectsByClassFunctionAndKey.entrySet().stream()
+                .filter(e -> this.where.select.objectClass.isAssignableFrom(e.getKey()))
+                .map(e -> e.getValue().get(this.where.function))
+                .filter(pair -> pair != null)
+                .toList();
 
-            if (uniqueByFunction != null) {
-                final var pair = uniqueByFunction.get(this.where.function);
-
-                if (pair != null) {
-                    final var object = pair.second().get(this.value);
-                    return object == null
-                        ? Stream.empty()
-                        : Stream.of(this.where.select.objectClass.cast(object));
-                }
+            if (!uniquePairs.isEmpty()) {
+                return uniquePairs.stream()
+                    .map(pair -> pair.second().get(this.value))
+                    .filter(obj -> obj != null)
+                    .map(this.where.select.objectClass::cast);
             }
 
-            // then attempt to use the non-unique function indexed values
-            final var objectsByFunction = AbstractHeapBasedIndex.this
-                .objectsByClassIndexableFunctionAndValue.get(this.where.select.objectClass);
+            // then attempt to use the non-unique function indexed values across all assignable classes
+            final var indexPairs = AbstractHeapBasedIndex.this.objectsByClassIndexableFunctionAndValue.entrySet().stream()
+                .filter(e -> this.where.select.objectClass.isAssignableFrom(e.getKey()))
+                .map(e -> e.getValue().get(this.where.function))
+                .filter(pair -> pair != null)
+                .toList();
 
-            if (objectsByFunction != null) {
-                final var pair = objectsByFunction.get(this.where.function);
-
-                if (pair != null) {
-                    final var objects = pair.second().get(this.value);
-                    return objects == null || objects.isEmpty()
-                        ? Stream.empty()
-                        : objects.stream()
-                        .map(this.where.select.objectClass::cast);
-                }
+            if (!indexPairs.isEmpty()) {
+                return indexPairs.stream()
+                    .map(pair -> pair.second().get(this.value))
+                    .filter(objects -> objects != null && !objects.isEmpty())
+                    .flatMap(Set::stream)
+                    .map(this.where.select.objectClass::cast);
             }
 
             // failing that, use the objects provided by the query
@@ -708,34 +706,33 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
         @Override
         public Stream<Q> findAll() {
-            // check the unique index first
-            final var uniqueByFunction = AbstractHeapBasedIndex.this
-                .uniqueObjectsByClassFunctionAndKey.get(this.where.select.objectClass);
+            // check the unique index across all assignable classes
+            final var uniquePairs = AbstractHeapBasedIndex.this.uniqueObjectsByClassFunctionAndKey.entrySet().stream()
+                .filter(e -> this.where.select.objectClass.isAssignableFrom(e.getKey()))
+                .map(e -> e.getValue().get(this.where.function))
+                .filter(pair -> pair != null)
+                .toList();
 
-            if (uniqueByFunction != null) {
-                final var pair = uniqueByFunction.get(this.where.function);
-
-                if (pair != null) {
-                    return pair.second().entrySet().stream()
-                        .filter(entry -> !Objects.equals(entry.getKey(), this.value))
-                        .map(entry -> this.where.select.objectClass.cast(entry.getValue()));
-                }
+            if (!uniquePairs.isEmpty()) {
+                return uniquePairs.stream()
+                    .flatMap(pair -> pair.second().entrySet().stream())
+                    .filter(entry -> !Objects.equals(entry.getKey(), this.value))
+                    .map(entry -> this.where.select.objectClass.cast(entry.getValue()));
             }
 
-            // then attempt to use the non-unique function indexed values
-            final var objectsByFunction = AbstractHeapBasedIndex.this
-                .objectsByClassIndexableFunctionAndValue.get(this.where.select.objectClass);
+            // then attempt to use the non-unique function indexed values across all assignable classes
+            final var indexPairs = AbstractHeapBasedIndex.this.objectsByClassIndexableFunctionAndValue.entrySet().stream()
+                .filter(e -> this.where.select.objectClass.isAssignableFrom(e.getKey()))
+                .map(e -> e.getValue().get(this.where.function))
+                .filter(pair -> pair != null)
+                .toList();
 
-            if (objectsByFunction != null) {
-                final var pair = objectsByFunction.get(this.where.function);
-
-                if (pair != null) {
-                    return pair.second().entrySet()
-                        .stream()
-                        .filter(entry -> !Objects.equals(entry.getKey(), this.value))
-                        .flatMap(entry -> entry.getValue().stream())
-                        .map(this.where.select.objectClass::cast);
-                }
+            if (!indexPairs.isEmpty()) {
+                return indexPairs.stream()
+                    .flatMap(pair -> pair.second().entrySet().stream())
+                    .filter(entry -> !Objects.equals(entry.getKey(), this.value))
+                    .flatMap(entry -> entry.getValue().stream())
+                    .map(this.where.select.objectClass::cast);
             }
 
             // failing that, use the objects provided by the query
@@ -792,37 +789,35 @@ public abstract class AbstractHeapBasedIndex implements Index {
         @Override
         @SuppressWarnings("unchecked")
         public Stream<Q> findAll() {
-            // check the unique index first
-            final var uniqueByFunction = AbstractHeapBasedIndex.this
-                .uniqueObjectsByClassFunctionAndKey.get(this.where.select.objectClass);
+            // check the unique index across all assignable classes
+            final var uniquePairs = AbstractHeapBasedIndex.this.uniqueObjectsByClassFunctionAndKey.entrySet().stream()
+                .filter(e -> this.where.select.objectClass.isAssignableFrom(e.getKey()))
+                .map(e -> e.getValue().get(this.where.function))
+                .filter(pair -> pair != null)
+                .toList();
 
-            if (uniqueByFunction != null) {
-                final var pair = uniqueByFunction.get(this.where.function);
-
-                if (pair != null) {
-                    return pair.second().entrySet().stream()
-                        .filter(entry -> this.predicate
-                            .test((V) (entry.getKey() == NULL_OBJECT ? null : entry.getKey())))
-                        .map(entry -> this.where.select.objectClass.cast(entry.getValue()));
-                }
+            if (!uniquePairs.isEmpty()) {
+                return uniquePairs.stream()
+                    .flatMap(pair -> pair.second().entrySet().stream())
+                    .filter(entry -> this.predicate
+                        .test((V) (entry.getKey() == NULL_OBJECT ? null : entry.getKey())))
+                    .map(entry -> this.where.select.objectClass.cast(entry.getValue()));
             }
 
-            // then attempt to use the non-unique function indexed values
-            final var objectsByFunction = AbstractHeapBasedIndex.this
-                .objectsByClassIndexableFunctionAndValue.get(this.where.select.objectClass);
+            // then attempt to use the non-unique function indexed values across all assignable classes
+            final var indexPairs = AbstractHeapBasedIndex.this.objectsByClassIndexableFunctionAndValue.entrySet().stream()
+                .filter(e -> this.where.select.objectClass.isAssignableFrom(e.getKey()))
+                .map(e -> e.getValue().get(this.where.function))
+                .filter(pair -> pair != null)
+                .toList();
 
-            if (objectsByFunction != null) {
-                final var pair = objectsByFunction.get(this.where.function);
-
-                if (pair != null) {
-                    return pair.second().entrySet().stream()
-                        .filter(entry -> this.predicate
-                            .test((V) ((entry.getKey() == NULL_OBJECT)
-                                ? null // convert the constant back to null
-                                : entry.getKey())))
-                        .flatMap(entry -> entry.getValue().stream())
-                        .map(this.where.select.objectClass::cast);
-                }
+            if (!indexPairs.isEmpty()) {
+                return indexPairs.stream()
+                    .flatMap(pair -> pair.second().entrySet().stream())
+                    .filter(entry -> this.predicate
+                        .test((V) ((entry.getKey() == NULL_OBJECT) ? null : entry.getKey())))
+                    .flatMap(entry -> entry.getValue().stream())
+                    .map(this.where.select.objectClass::cast);
             }
 
             // failing that, use the objects provided by the query
