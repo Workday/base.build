@@ -354,8 +354,10 @@ public interface IndexCompatibilityTests {
         index.add(Circle.class, circle);
         index.add(Square.class, square);
 
-        assertThat(index.match(Shape.class).findAll().toList())
-            .containsExactlyInAnyOrder(circle, square);
+        assertThat(index.match(Shape.class)
+            .findAll()
+            .toList()
+        ).containsExactlyInAnyOrder(circle, square);
     }
 
     /**
@@ -368,14 +370,106 @@ public interface IndexCompatibilityTests {
 
         index.add(Circle.class, circle);
 
-        assertThat(index.match(Shape.class).scope(Scope.Indexed).findAll().toList())
-            .containsExactly(circle);
+        assertThat(index.match(Shape.class)
+            .scope(Scope.Indexed)
+            .findAll()
+            .toList()
+        ).containsExactly(circle);
+    }
+
+    /**
+     * Ensure a non-{@link Indexable} {@code where} predicate falls through to {@code indexedStream()} correctly
+     * when querying by supertype with {@link Scope#Indexed}.
+     */
+    @Test
+    default void shouldFilterBySupertypeViaFallbackPredicateWithIndexedScope() {
+        final var index = createIndex();
+        final var redCircle = new Circle("red");
+        final var blueSquare = new Square("blue");
+
+        index.add(Circle.class, redCircle);
+        index.add(Square.class, blueSquare);
+
+        assertThat(index.match(Shape.class)
+            .scope(Scope.Indexed)
+            .where(Shape::color)
+            .isEqualTo("red")
+            .findAll()
+            .toList()
+        ).containsExactly(redCircle);
+    }
+
+    /**
+     * Ensure {@link Condition#isEqualTo} uses the indexed path when the {@link Indexable} function is declared on
+     * a supertype and the query class is that supertype.
+     */
+    @Test
+    default void shouldFindBySupertypeUsingIndexedFunctionEquality() {
+        final var index = createIndex();
+        final var red = new Circle("red");
+        final var blue = new Square("blue");
+
+        index.index(red);
+        index.index(blue);
+
+        assertThat(index.match(Shape.class).scope(Scope.Indexed).where(Shape.COLOR).isEqualTo("red").findFirst()).contains(red);
+        assertThat(index.match(Shape.class).scope(Scope.Indexed).where(Shape.COLOR).isEqualTo("blue").findFirst()).contains(blue);
+        assertThat(index.match(Shape.class).scope(Scope.Indexed).where(Shape.COLOR).isEqualTo("green").findFirst()).isEmpty();
+    }
+
+    /**
+     * Ensure {@link Condition#isNotEqualTo} uses the indexed path when the {@link Indexable} function is declared on
+     * a supertype and the query class is that supertype.
+     */
+    @Test
+    default void shouldFindBySupertypeUsingIndexedFunctionInequality() {
+        final var index = createIndex();
+        final var red = new Circle("red");
+        final var blue = new Square("blue");
+
+        index.index(red);
+        index.index(blue);
+
+        assertThat(index.match(Shape.class)
+            .scope(Scope.Indexed)
+            .where(Shape.COLOR)
+            .isNotEqualTo("red")
+            .findAll()
+            .toList()
+        ).containsExactly(blue);
+    }
+
+    /**
+     * Ensure {@link Condition#matches} uses the indexed path when the {@link Indexable} function is declared on
+     * a supertype and the query class is that supertype.
+     */
+    @Test
+    default void shouldFindBySupertypeUsingIndexedFunctionPredicate() {
+        final var index = createIndex();
+        final var red = new Circle("red");
+        final var blue = new Square("blue");
+
+        index.index(red);
+        index.index(blue);
+
+        assertThat(index.match(Shape.class)
+            .scope(Scope.Indexed)
+            .where(Shape.COLOR)
+            .matches(c -> c.startsWith("r"))
+            .findAll()
+            .toList()
+        ).containsExactly(red);
     }
 
     /**
      * A simple marker interface for supertype-query tests.
      */
     interface Shape {
+        String color();
+
+        @Indexable
+        @Unique
+        public static final Function<Shape, String> COLOR = Shape::color;
     }
 
     record Circle(String color) implements Shape {
