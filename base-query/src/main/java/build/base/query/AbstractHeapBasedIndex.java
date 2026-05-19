@@ -126,21 +126,11 @@ public abstract class AbstractHeapBasedIndex implements Index {
     public void index(final Object object) {
         final var objectClass = object.getClass();
 
-        // always register the object in objectByClass — an @Indexable function field is sufficient
-        // to make the type a class-membership participant; type-level @Indexable remains accepted
-        // but is no longer required
-        this.objectByClass.compute(objectClass, (_, existing) -> {
-            final var objects = existing == null
-                ? ConcurrentHashMap.newKeySet()
-                : existing;
-
-            objects.add(object);
-            return objects;
-        });
+        final var nonUniqueFunctionFields = this.indexableFunctionFieldsByClass.compute(objectClass);
+        final var uniqueFunctionFields = this.uniqueIndexableFunctionFieldsByClass.compute(objectClass);
 
         // index the values produced by public static final @Indexable Function fields
-        this.indexableFunctionFieldsByClass
-            .compute(objectClass)
+        nonUniqueFunctionFields
             .forEach(field -> this.objectsByClassIndexableFunctionAndValue
                 .compute(objectClass, (_, existingFunctions) -> {
                     final var functions = existingFunctions == null
@@ -191,8 +181,7 @@ public abstract class AbstractHeapBasedIndex implements Index {
                 }));
 
         // index the values produced by public static final @Indexable @Unique Function fields
-        this.uniqueIndexableFunctionFieldsByClass
-            .compute(objectClass)
+        uniqueFunctionFields
             .forEach(field -> this.uniqueObjectsByClassFunctionAndKey
                 .compute(objectClass, (_, existingFunctions) -> {
                     final var functions = existingFunctions == null
@@ -236,27 +225,32 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
                     return functions;
                 }));
+
+        // register in objectByClass after all function fields are successfully indexed — this ensures
+        // that a thrown exception during function indexing leaves objectByClass clean
+        if (Introspection.hasDeclaredAnnotation(objectClass, Indexable.class)
+                || !nonUniqueFunctionFields.isEmpty()
+                || !uniqueFunctionFields.isEmpty()) {
+            this.objectByClass.compute(objectClass, (_, existing) -> {
+                final var objects = existing == null
+                    ? ConcurrentHashMap.newKeySet()
+                    : existing;
+
+                objects.add(object);
+                return objects;
+            });
+        }
     }
 
     @Override
     public void unindex(final Object object) {
         final var objectClass = object.getClass();
 
-        // always remove from objectByClass, symmetrical with index()
-        this.objectByClass.compute(objectClass, (_, existing) -> {
-            if (existing == null) {
-                return null;
-            } else {
-                existing.remove(object);
-                return existing.isEmpty()
-                    ? null
-                    : existing;
-            }
-        });
+        final var nonUniqueFunctionFields = this.indexableFunctionFieldsByClass.compute(objectClass);
+        final var uniqueFunctionFields = this.uniqueIndexableFunctionFieldsByClass.compute(objectClass);
 
         // unindex the values produced by public static final @Indexable Function fields
-        this.indexableFunctionFieldsByClass
-            .compute(objectClass)
+        nonUniqueFunctionFields
             .forEach(field -> this.objectsByClassIndexableFunctionAndValue
                 .compute(objectClass, (_, existingFunctions) -> {
                     if (existingFunctions == null) {
@@ -304,8 +298,7 @@ public abstract class AbstractHeapBasedIndex implements Index {
                 }));
 
         // unindex the values produced by public static final @Indexable @Unique Function fields
-        this.uniqueIndexableFunctionFieldsByClass
-            .compute(objectClass)
+        uniqueFunctionFields
             .forEach(field -> this.uniqueObjectsByClassFunctionAndKey
                 .compute(objectClass, (_, existingFunctions) -> {
                     if (existingFunctions == null) {
@@ -332,6 +325,22 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
                     return existingFunctions.isEmpty() ? null : existingFunctions;
                 }));
+
+        // remove from objectByClass after all function maps are cleaned up — symmetric with index()
+        if (Introspection.hasDeclaredAnnotation(objectClass, Indexable.class)
+                || !nonUniqueFunctionFields.isEmpty()
+                || !uniqueFunctionFields.isEmpty()) {
+            this.objectByClass.compute(objectClass, (_, existing) -> {
+                if (existing == null) {
+                    return null;
+                } else {
+                    existing.remove(object);
+                    return existing.isEmpty()
+                        ? null
+                        : existing;
+                }
+            });
+        }
     }
 
 

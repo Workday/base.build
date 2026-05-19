@@ -647,6 +647,65 @@ public interface IndexCompatibilityTests {
             () -> index.index(new NotIndexable(Color.RED)));
     }
 
+    /**
+     * Ensure that when {@link Index#index} throws, the object is not registered in class-membership — i.e.,
+     * {@code objectByClass} is left clean because it is populated only after function-map indexing succeeds.
+     */
+    @Test
+    default void shouldNotRegisterInClassMembershipWhenIndexingFails() {
+        final var index = createIndex();
+        final var object = new NotIndexable(Color.RED);
+
+        assertThrows(UnsupportedOperationException.class, () -> index.index(object));
+
+        assertThat(index.match(NotIndexable.class)
+            .scope(Scope.Indexed)
+            .findAll()
+            .toList()
+        ).isEmpty();
+    }
+
+    /**
+     * Ensure that a class with no {@link Indexable} annotation and no {@link Indexable} function fields is
+     * <em>not</em> registered in class-membership when indexed — only the function-indexed maps are used.
+     *
+     * <p>Regression for an over-eager fix that added every indexed object to {@code objectByClass} regardless
+     * of whether the class opted in via {@link Indexable}.
+     */
+    @Test
+    default void shouldNotRegisterInClassMembershipWhenNoIndexableFieldOrAnnotation() {
+        final var index = createIndex();
+
+        index.index(new Plain("hello"));
+
+        assertThat(index.match(Plain.class)
+            .scope(Scope.Indexed)
+            .findAll()
+            .toList()
+        ).isEmpty();
+    }
+
+    /**
+     * Ensure that a class with an {@link Indexable} function field (but no type-level {@link Indexable} annotation)
+     * <em>is</em> registered in class-membership when indexed.
+     *
+     * <p>This is the complement of {@link #shouldNotRegisterInClassMembershipWhenNoIndexableFieldOrAnnotation}:
+     * a function-field {@link Indexable} is sufficient to opt the type in to class-membership queries.
+     */
+    @Test
+    default void shouldRegisterInClassMembershipWhenFunctionFieldIsIndexable() {
+        final var index = createIndex();
+
+        final var colorful = new Colorful(Color.RED);
+        index.index(colorful);
+
+        assertThat(index.match(Colorful.class)
+            .scope(Scope.Indexed)
+            .findAll()
+            .toList()
+        ).containsExactly(colorful);
+    }
+
     // ---- reindexDynamic
 
     /**
@@ -841,6 +900,13 @@ public interface IndexCompatibilityTests {
          * A non-{@link Indexable} function that always returns {@code null}.
          */
         public static final Function<NullFallbackColorful, Color> COLOR = _ -> null;
+    }
+
+    /**
+     * A plain class with no {@link Indexable} annotation and no {@link Indexable} function fields — used to verify
+     * that {@link Index#index} does not register such types in class-membership.
+     */
+    record Plain(String value) {
     }
 
     /**
