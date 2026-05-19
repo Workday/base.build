@@ -9,9 +9,9 @@ package build.base.query;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,12 +30,15 @@ import java.lang.reflect.Modifier;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.Spliterators;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -59,20 +62,7 @@ public abstract class AbstractHeapBasedIndex implements Index {
     private final ConcurrentHashMap<Class<?>, Set<Object>> objectByClass;
 
     /**
-     * The {@link Indexable} {@code public} {@code static} {@code final} {@link Function}s defined by
-     * {@link Field}s per known {@link Class}.
-     */
-    private final Memoizer<Class<?>, Streamable<Field>> indexableFunctionFieldsByClass;
-
-    /**
-     * The indexed {@link Object}s by {@link Class}, {@link Indexable} {@link Function}, and extracted value.
-     * <p>
-     * The {@link Pair} value holds:
-     * <ul>
-     *   <li>first — a reverse-index mapping each indexed {@link Object} to the value extracted at index time</li>
-     *   <li>second — a forward-index mapping each extracted value to the {@link Set} of {@link Object}s indexed with
-     *   that value</li>
-     * </ul>
+     * Reverse + forward maps for non-{@link Unique} {@link Indexable} functions, keyed by class then function.
      */
     private final ConcurrentHashMap<
         Class<?>,
@@ -81,14 +71,7 @@ public abstract class AbstractHeapBasedIndex implements Index {
             Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>>>> objectsByClassIndexableFunctionAndValue;
 
     /**
-     * The uniquely-indexed {@link Object}s by {@link Class}, {@link Indexable} {@link Unique} {@link Function}, and
-     * extracted key.
-     * <p>
-     * The {@link Pair} value holds:
-     * <ul>
-     *   <li>first — a reverse-index mapping each indexed {@link Object} to the key extracted at index time</li>
-     *   <li>second — a forward-index mapping each extracted key to the single {@link Object} indexed with that key</li>
-     * </ul>
+     * Reverse + forward maps for {@link Unique} {@link Indexable} functions, keyed by class then function.
      */
     private final ConcurrentHashMap<
         Class<?>,
@@ -97,16 +80,28 @@ public abstract class AbstractHeapBasedIndex implements Index {
             Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Object>>>> uniqueObjectsByClassFunctionAndKey;
 
     /**
-     * The {@link Indexable} {@link Unique} {@code public} {@code static} {@code final} {@link Function}s defined by
-     * {@link Field}s per known {@link Class}.
+     * The resolved {@link Indexable} (non-{@link Unique}) {@link Function}s per {@link Class}, memoized so that
+     * reflection is performed at most once per class.
      */
-    private final Memoizer<Class<?>, Streamable<Field>> uniqueIndexableFunctionFieldsByClass;
+    private final Memoizer<Class<?>, Streamable<Function<Object, Object>>> indexableFunctionsByClass;
 
     /**
-     * The {@link Indexable} {@link Dynamic} {@code public} {@code static} {@code final} {@link Function}s defined by
-     * {@link Field}s per known {@link Class} (includes both {@link Unique} and non-{@link Unique} fields).
+     * The resolved {@link Indexable} {@link Unique} {@link Function}s per {@link Class}, memoized so that reflection
+     * is performed at most once per class.
      */
-    private final Memoizer<Class<?>, Streamable<Field>> dynamicIndexableFunctionFieldsByClass;
+    private final Memoizer<Class<?>, Streamable<Function<Object, Object>>> uniqueIndexableFunctionsByClass;
+
+    /**
+     * The resolved {@link Indexable} {@link Dynamic} (non-{@link Unique}) {@link Function}s per {@link Class},
+     * memoized so that reflection is performed at most once per class.
+     */
+    private final Memoizer<Class<?>, Streamable<Function<Object, Object>>> dynamicNonUniqueFunctionsByClass;
+
+    /**
+     * The resolved {@link Indexable} {@link Dynamic} {@link Unique} {@link Function}s per {@link Class}, memoized so
+     * that reflection is performed at most once per class.
+     */
+    private final Memoizer<Class<?>, Streamable<Function<Object, Object>>> dynamicUniqueFunctionsByClass;
 
     /**
      * Constructs an empty {@link AbstractHeapBasedIndex}.
@@ -114,128 +109,25 @@ public abstract class AbstractHeapBasedIndex implements Index {
     protected AbstractHeapBasedIndex() {
         this.objectByClass = new ConcurrentHashMap<>();
         this.objectsByClassIndexableFunctionAndValue = new ConcurrentHashMap<>();
-        this.indexableFunctionFieldsByClass = new Memoizer<>(AbstractHeapBasedIndex::getIndexableFunctionFields);
         this.uniqueObjectsByClassFunctionAndKey = new ConcurrentHashMap<>();
-        this.uniqueIndexableFunctionFieldsByClass = new Memoizer<>(AbstractHeapBasedIndex::getUniqueIndexableFunctionFields);
-        this.dynamicIndexableFunctionFieldsByClass = new Memoizer<>(AbstractHeapBasedIndex::getDynamicIndexableFunctionFields);
+        this.indexableFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveIndexableFunctions);
+        this.uniqueIndexableFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveUniqueIndexableFunctions);
+        this.dynamicNonUniqueFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveDynamicNonUniqueFunctions);
+        this.dynamicUniqueFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveDynamicUniqueFunctions);
     }
 
-
-    @SuppressWarnings("unchecked")
     @Override
     public void index(final Object object) {
         final var objectClass = object.getClass();
+        final var nonUniqueFunctions = this.indexableFunctionsByClass.compute(objectClass);
+        final var uniqueFunctions = this.uniqueIndexableFunctionsByClass.compute(objectClass);
 
-        final var nonUniqueFunctionFields = this.indexableFunctionFieldsByClass.compute(objectClass);
-        final var uniqueFunctionFields = this.uniqueIndexableFunctionFieldsByClass.compute(objectClass);
+        nonUniqueFunctions.forEach(function -> indexNonUnique(objectClass, function, object));
+        uniqueFunctions.forEach(function -> indexUnique(objectClass, function, object));
 
-        // index the values produced by public static final @Indexable Function fields
-        nonUniqueFunctionFields
-            .forEach(field -> this.objectsByClassIndexableFunctionAndValue
-                .compute(objectClass, (_, existingFunctions) -> {
-                    final var functions = existingFunctions == null
-                        ? new ConcurrentHashMap<Function<Object, Object>, Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>>>()
-                        : existingFunctions;
-
-                    try {
-                        // attempt to obtain the @Indexable value from the Function
-                        field.setAccessible(true);
-                        final var function = (Function<Object, Object>) field.get(null);
-
-                        functions.compute(function, (_, existingPair) -> {
-                            final var pair = existingPair == null
-                                ? Pair.of(new ConcurrentHashMap<>(), new ConcurrentHashMap<Object, Set<Object>>())
-                                : existingPair;
-
-                            // extract the value from the queryable using the function
-                            try {
-                                final var value = function.apply(object);
-
-                                final var indexableValue = value == null
-                                    ? NULL_OBJECT // use a constant to represent null values
-                                    : value;
-
-                                // record the reverse mapping: object → extracted value
-                                pair.first().put(object, indexableValue);
-
-                                // record the forward mapping: extracted value → objects
-                                pair.second().compute(indexableValue, (_, existingObjects) -> {
-                                    final var objects = existingObjects == null
-                                        ? ConcurrentHashMap.newKeySet()
-                                        : existingObjects;
-
-                                    objects.add(object);
-                                    return objects;
-                                });
-
-                                return pair;
-                            } catch (final Throwable e) {
-                                throw new UnsupportedOperationException("Failed to index [" + objectClass.getName() + "] as the function [" + field.getName() + "] failed to extract a value from the object", e);
-                            }
-                        });
-                    } catch (final IllegalAccessException e) {
-                        throw new RuntimeException("Failed to index [" + objectClass.getName() + "] as the field [" + field.getName() + "] could not be accessed", e);
-                    }
-
-                    return functions;
-                }));
-
-        // index the values produced by public static final @Indexable @Unique Function fields
-        uniqueFunctionFields
-            .forEach(field -> this.uniqueObjectsByClassFunctionAndKey
-                .compute(objectClass, (_, existingFunctions) -> {
-                    final var functions = existingFunctions == null
-                        ? new ConcurrentHashMap<Function<Object, Object>, Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Object>>>()
-                        : existingFunctions;
-
-                    try {
-                        field.setAccessible(true);
-                        @SuppressWarnings("unchecked") final var function = (Function<Object, Object>) field.get(null);
-
-                        functions.compute(function, (_, existingPair) -> {
-                            final var pair = existingPair == null
-                                ? Pair.of(new ConcurrentHashMap<>(), new ConcurrentHashMap<Object, Object>())
-                                : existingPair;
-
-                            try {
-                                final var value = function.apply(object);
-                                final var indexableValue = value == null ? NULL_OBJECT : value;
-
-                                // enforce uniqueness: two different objects must not share a key
-                                final var displaced = pair.second().putIfAbsent(indexableValue, object);
-                                if (displaced != null && displaced != object) {
-                                    throw new IllegalStateException(
-                                        "Unique key violation: key [" + value + "] produced by [" + field.getName()
-                                            + "] on [" + objectClass.getName() + "] is already held by [" + displaced + "]");
-                                }
-
-                                // record the reverse mapping: object → extracted key
-                                pair.first().put(object, indexableValue);
-
-                                return pair;
-                            } catch (final IllegalStateException e) {
-                                throw e;
-                            } catch (final Throwable e) {
-                                throw new UnsupportedOperationException("Failed to index [" + objectClass.getName() + "] as the unique function [" + field.getName() + "] failed to extract a value from the object", e);
-                            }
-                        });
-                    } catch (final IllegalAccessException e) {
-                        throw new RuntimeException("Failed to index [" + objectClass.getName() + "] as the unique field [" + field.getName() + "] could not be accessed", e);
-                    }
-
-                    return functions;
-                }));
-
-        // register in objectByClass after all function fields are successfully indexed — this ensures
-        // that a thrown exception during function indexing leaves objectByClass clean
-        if (Introspection.hasDeclaredAnnotation(objectClass, Indexable.class)
-                || !nonUniqueFunctionFields.isEmpty()
-                || !uniqueFunctionFields.isEmpty()) {
+        if (isIndexParticipant(objectClass, nonUniqueFunctions, uniqueFunctions)) {
             this.objectByClass.compute(objectClass, (_, existing) -> {
-                final var objects = existing == null
-                    ? ConcurrentHashMap.newKeySet()
-                    : existing;
-
+                final var objects = existing == null ? ConcurrentHashMap.newKeySet() : existing;
                 objects.add(object);
                 return objects;
             });
@@ -245,216 +137,29 @@ public abstract class AbstractHeapBasedIndex implements Index {
     @Override
     public void unindex(final Object object) {
         final var objectClass = object.getClass();
+        final var nonUniqueFunctions = this.indexableFunctionsByClass.compute(objectClass);
+        final var uniqueFunctions = this.uniqueIndexableFunctionsByClass.compute(objectClass);
 
-        final var nonUniqueFunctionFields = this.indexableFunctionFieldsByClass.compute(objectClass);
-        final var uniqueFunctionFields = this.uniqueIndexableFunctionFieldsByClass.compute(objectClass);
+        nonUniqueFunctions.forEach(function -> unindexNonUnique(objectClass, function, object));
+        uniqueFunctions.forEach(function -> unindexUnique(objectClass, function, object));
 
-        // unindex the values produced by public static final @Indexable Function fields
-        nonUniqueFunctionFields
-            .forEach(field -> this.objectsByClassIndexableFunctionAndValue
-                .compute(objectClass, (_, existingFunctions) -> {
-                    if (existingFunctions == null) {
-                        return null; // nothing to remove
-                    }
-                    try {
-                        // attempt to obtain the @Indexable value from the Function
-                        field.setAccessible(true);
-
-                        @SuppressWarnings("unchecked") final var function = (Function<Object, Object>) field.get(null);
-
-                        existingFunctions.compute(function, (_, existingPair) -> {
-                            if (existingPair == null) {
-                                return null; // nothing to remove
-                            } else {
-                                // look up the indexed value from the reverse map — no function invocation needed
-                                final var indexableValue = existingPair.first().remove(object);
-
-                                if (indexableValue != null) {
-                                    existingPair.second().compute(indexableValue, (_, existingQueryables) -> {
-                                        if (existingQueryables == null) {
-                                            return null; // nothing to remove
-                                        } else {
-                                            existingQueryables.remove(object);
-
-                                            return existingQueryables.isEmpty()
-                                                ? null // return null if empty
-                                                : existingQueryables;
-                                        }
-                                    });
-                                }
-
-                                return existingPair.second().isEmpty()
-                                    ? null // return null if empty
-                                    : existingPair;
-                            }
-                        });
-                    } catch (final IllegalAccessException e) {
-                        throw new RuntimeException("Failed to unindex [" + objectClass.getName() + "] as the field [" + field.getName() + "] could not be accessed", e);
-                    }
-
-                    return existingFunctions.isEmpty()
-                        ? null // return null if empty
-                        : existingFunctions; // return the functions if not empty
-                }));
-
-        // unindex the values produced by public static final @Indexable @Unique Function fields
-        uniqueFunctionFields
-            .forEach(field -> this.uniqueObjectsByClassFunctionAndKey
-                .compute(objectClass, (_, existingFunctions) -> {
-                    if (existingFunctions == null) {
-                        return null;
-                    }
-                    try {
-                        field.setAccessible(true);
-                        @SuppressWarnings("unchecked") final var function = (Function<Object, Object>) field.get(null);
-
-                        existingFunctions.compute(function, (_, existingPair) -> {
-                            if (existingPair == null) {
-                                return null;
-                            }
-                            // look up the key from the reverse map — no function invocation needed
-                            final var indexableKey = existingPair.first().remove(object);
-                            if (indexableKey != null) {
-                                existingPair.second().remove(indexableKey);
-                            }
-                            return existingPair.second().isEmpty() ? null : existingPair;
-                        });
-                    } catch (final IllegalAccessException e) {
-                        throw new RuntimeException("Failed to unindex [" + objectClass.getName() + "] as the unique field [" + field.getName() + "] could not be accessed", e);
-                    }
-
-                    return existingFunctions.isEmpty() ? null : existingFunctions;
-                }));
-
-        // remove from objectByClass after all function maps are cleaned up — symmetric with index()
-        if (Introspection.hasDeclaredAnnotation(objectClass, Indexable.class)
-                || !nonUniqueFunctionFields.isEmpty()
-                || !uniqueFunctionFields.isEmpty()) {
+        if (isIndexParticipant(objectClass, nonUniqueFunctions, uniqueFunctions)) {
             this.objectByClass.compute(objectClass, (_, existing) -> {
                 if (existing == null) {
                     return null;
-                } else {
-                    existing.remove(object);
-                    return existing.isEmpty()
-                        ? null
-                        : existing;
                 }
+                existing.remove(object);
+                return existing.isEmpty() ? null : existing;
             });
         }
     }
 
-
     @Override
     public void reindexDynamic(final Object object) {
         final var objectClass = object.getClass();
-
-        this.dynamicIndexableFunctionFieldsByClass.compute(objectClass).forEach(field -> {
-            final boolean isUnique = field.getAnnotation(Unique.class) != null;
-
-            if (isUnique) {
-                this.uniqueObjectsByClassFunctionAndKey.compute(objectClass, (_, existingFunctions) -> {
-                    final var functions = existingFunctions == null
-                        ? new ConcurrentHashMap<Function<Object, Object>, Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Object>>>()
-                        : existingFunctions;
-
-                    try {
-                        field.setAccessible(true);
-                        @SuppressWarnings("unchecked") final var function = (Function<Object, Object>) field.get(null);
-
-                        functions.compute(function, (_, existingPair) -> {
-                            final var pair = existingPair == null
-                                ? Pair.of(new ConcurrentHashMap<>(), new ConcurrentHashMap<Object, Object>())
-                                : existingPair;
-
-                            // unindex old key using the reverse map — no function invocation needed
-                            final var oldKey = pair.first().remove(object);
-                            if (oldKey != null) {
-                                pair.second().remove(oldKey);
-                            }
-
-                            // re-index with the current value
-                            try {
-                                final var value = function.apply(object);
-                                final var newKey = value == null ? NULL_OBJECT : value;
-
-                                final var displaced = pair.second().putIfAbsent(newKey, object);
-                                if (displaced != null && displaced != object) {
-                                    throw new IllegalStateException(
-                                        "Unique key violation: key [" + value + "] produced by [" + field.getName()
-                                            + "] on [" + objectClass.getName() + "] is already held by [" + displaced + "]");
-                                }
-
-                                pair.first().put(object, newKey);
-                            } catch (final IllegalStateException e) {
-                                throw e;
-                            } catch (final Throwable e) {
-                                throw new UnsupportedOperationException("Failed to reindex [" + objectClass.getName() + "] as the unique function [" + field.getName() + "] failed to extract a value from the object", e);
-                            }
-
-                            return pair;
-                        });
-                    } catch (final IllegalAccessException e) {
-                        throw new RuntimeException("Failed to reindex [" + objectClass.getName() + "] as the unique field [" + field.getName() + "] could not be accessed", e);
-                    }
-
-                    return functions;
-                });
-            } else {
-                this.objectsByClassIndexableFunctionAndValue.compute(objectClass, (_, existingFunctions) -> {
-                    final var functions = existingFunctions == null
-                        ? new ConcurrentHashMap<Function<Object, Object>, Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>>>()
-                        : existingFunctions;
-
-                    try {
-                        field.setAccessible(true);
-                        @SuppressWarnings("unchecked") final var function = (Function<Object, Object>) field.get(null);
-
-                        functions.compute(function, (_, existingPair) -> {
-                            final var pair = existingPair == null
-                                ? Pair.of(new ConcurrentHashMap<>(), new ConcurrentHashMap<Object, Set<Object>>())
-                                : existingPair;
-
-                            // unindex old value using the reverse map — no function invocation needed
-                            final var oldValue = pair.first().remove(object);
-                            if (oldValue != null) {
-                                pair.second().compute(oldValue, (_, existingObjects) -> {
-                                    if (existingObjects == null) {
-                                        return null;
-                                    }
-                                    existingObjects.remove(object);
-                                    return existingObjects.isEmpty() ? null : existingObjects;
-                                });
-                            }
-
-                            // re-index with the current value
-                            try {
-                                final var value = function.apply(object);
-                                final var newValue = value == null ? NULL_OBJECT : value;
-
-                                pair.first().put(object, newValue);
-                                pair.second().compute(newValue, (_, existingObjects) -> {
-                                    final var objects = existingObjects == null
-                                        ? ConcurrentHashMap.newKeySet()
-                                        : existingObjects;
-                                    objects.add(object);
-                                    return objects;
-                                });
-                            } catch (final Throwable e) {
-                                throw new UnsupportedOperationException("Failed to reindex [" + objectClass.getName() + "] as the function [" + field.getName() + "] failed to extract a value from the object", e);
-                            }
-
-                            return pair;
-                        });
-                    } catch (final IllegalAccessException e) {
-                        throw new RuntimeException("Failed to reindex [" + objectClass.getName() + "] as the field [" + field.getName() + "] could not be accessed", e);
-                    }
-
-                    return functions;
-                });
-            }
-        });
+        this.dynamicNonUniqueFunctionsByClass.compute(objectClass).forEach(function -> reindexNonUnique(objectClass, function, object));
+        this.dynamicUniqueFunctionsByClass.compute(objectClass).forEach(function -> reindexUnique(objectClass, function, object));
     }
-
 
     @Override
     public <T> void add(final Class<T> valueClass, final T value) {
@@ -462,10 +167,7 @@ public abstract class AbstractHeapBasedIndex implements Index {
         Objects.requireNonNull(value, "The value must not be null");
 
         this.objectByClass.compute(valueClass, (_, existing) -> {
-            final var objects = existing == null
-                ? ConcurrentHashMap.newKeySet()
-                : existing;
-
+            final var objects = existing == null ? ConcurrentHashMap.newKeySet() : existing;
             objects.add(value);
             return objects;
         });
@@ -479,12 +181,9 @@ public abstract class AbstractHeapBasedIndex implements Index {
         this.objectByClass.compute(valueClass, (_, existing) -> {
             if (existing == null) {
                 return null;
-            } else {
-                existing.remove(value);
-                return existing.isEmpty()
-                    ? null
-                    : existing;
             }
+            existing.remove(value);
+            return existing.isEmpty() ? null : existing;
         });
     }
 
@@ -514,55 +213,299 @@ public abstract class AbstractHeapBasedIndex implements Index {
         return new Query<>(this, matchableClass);
     }
 
+    // ---- index / unindex / reindex operations
+
+    private void indexNonUnique(final Class<?> objectClass, final Function<Object, Object> function, final Object object) {
+        onNonUniquePair(objectClass, function, pair -> {
+            try {
+                putNonUnique(pair, object, toIndexableValue(function.apply(object)));
+            } catch (final Throwable e) {
+                throw new UnsupportedOperationException("Failed to index [" + objectClass.getName() + "] as a function failed to extract a value from the object", e);
+            }
+        });
+    }
+
+    private void indexUnique(final Class<?> objectClass, final Function<Object, Object> function, final Object object) {
+        onUniquePair(objectClass, function, pair -> {
+            try {
+                final var value = function.apply(object);
+                putUnique(pair, object, toIndexableValue(value), value, objectClass);
+            } catch (final IllegalStateException e) {
+                throw e;
+            } catch (final Throwable e) {
+                throw new UnsupportedOperationException("Failed to index [" + objectClass.getName() + "] as a unique function failed to extract a value from the object", e);
+            }
+        });
+    }
+
+    private void unindexNonUnique(final Class<?> objectClass, final Function<Object, Object> function, final Object object) {
+        onExistingNonUniquePair(objectClass, function, pair -> {
+            if (pair == null) {
+                return null;
+            }
+            removeNonUnique(pair, object);
+            return pair.second().isEmpty() ? null : pair;
+        });
+    }
+
+    private void unindexUnique(final Class<?> objectClass, final Function<Object, Object> function, final Object object) {
+        onExistingUniquePair(objectClass, function, pair -> {
+            if (pair == null) {
+                return null;
+            }
+            removeUnique(pair, object);
+            return pair.second().isEmpty() ? null : pair;
+        });
+    }
+
+    private void reindexNonUnique(final Class<?> objectClass, final Function<Object, Object> function, final Object object) {
+        onNonUniquePair(objectClass, function, pair -> {
+            removeNonUnique(pair, object);
+            try {
+                putNonUnique(pair, object, toIndexableValue(function.apply(object)));
+            } catch (final Throwable e) {
+                throw new UnsupportedOperationException("Failed to reindex [" + objectClass.getName() + "] as a dynamic function failed to extract a value from the object", e);
+            }
+        });
+    }
+
+    private void reindexUnique(final Class<?> objectClass, final Function<Object, Object> function, final Object object) {
+        onUniquePair(objectClass, function, pair -> {
+            removeUnique(pair, object);
+            try {
+                final var value = function.apply(object);
+                putUnique(pair, object, toIndexableValue(value), value, objectClass);
+            } catch (final IllegalStateException e) {
+                throw e;
+            } catch (final Throwable e) {
+                throw new UnsupportedOperationException("Failed to reindex [" + objectClass.getName() + "] as a dynamic unique function failed to extract a value from the object", e);
+            }
+        });
+    }
+
+    // ---- structural helpers: outer-compute + inner-compute skeleton
+
     /**
-     * Obtains the {@code public static final} {@link Function} {@link Field}s that are annotated as {@link Indexable}
-     * for the specified {@link Class}.
-     *
-     * @param indexableClass the {@link Class} of queryable
-     * @return the {@link Streamable} of {@link Field}s that are annotated with {@link Indexable}
+     * Runs {@code action} on the pair for {@code function} within {@code objectClass}, creating maps if absent.
      */
-    protected static Streamable<Field> getIndexableFunctionFields(final Class<?> indexableClass) {
-        return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
-            .filter(field -> field.getAnnotation(Indexable.class) != null
-                && field.getAnnotation(Unique.class) == null
-                && Modifier.isPublic(field.getModifiers())
-                && Modifier.isStatic(field.getModifiers())
-                && Modifier.isFinal(field.getModifiers())
-                && Function.class.isAssignableFrom(field.getType())));
+    private void onNonUniquePair(final Class<?> objectClass,
+                                 final Function<Object, Object> function,
+                                 final Consumer<Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>>> action) {
+        this.objectsByClassIndexableFunctionAndValue.compute(objectClass, (_, existingFunctions) -> {
+            final var functions = existingFunctions == null
+                ? new ConcurrentHashMap<Function<Object, Object>, Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>>>()
+                : existingFunctions;
+
+            functions.compute(function, (_, existingPair) -> {
+                final var pair = existingPair == null
+                    ? Pair.of(new ConcurrentHashMap<>(), new ConcurrentHashMap<Object, Set<Object>>())
+                    : existingPair;
+                action.accept(pair);
+                return pair;
+            });
+
+            return functions;
+        });
     }
 
     /**
-     * Obtains the {@code public static final} {@link Function} {@link Field}s that are annotated as both
-     * {@link Indexable} and {@link Unique} for the specified {@link Class}.
-     *
-     * @param indexableClass the {@link Class} of queryable
-     * @return the {@link Streamable} of {@link Field}s annotated with both {@link Indexable} and {@link Unique}
+     * Runs {@code action} on the pair for {@code function} within {@code objectClass}, creating maps if absent.
      */
-    protected static Streamable<Field> getUniqueIndexableFunctionFields(final Class<?> indexableClass) {
-        return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
-            .filter(field -> field.getAnnotation(Indexable.class) != null
-                && field.getAnnotation(Unique.class) != null
-                && Modifier.isPublic(field.getModifiers())
-                && Modifier.isStatic(field.getModifiers())
-                && Modifier.isFinal(field.getModifiers())
-                && Function.class.isAssignableFrom(field.getType())));
+    private void onUniquePair(final Class<?> objectClass,
+                              final Function<Object, Object> function,
+                              final Consumer<Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Object>>> action) {
+        this.uniqueObjectsByClassFunctionAndKey.compute(objectClass, (_, existingFunctions) -> {
+            final var functions = existingFunctions == null
+                ? new ConcurrentHashMap<Function<Object, Object>, Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Object>>>()
+                : existingFunctions;
+
+            functions.compute(function, (_, existingPair) -> {
+                final var pair = existingPair == null
+                    ? Pair.of(new ConcurrentHashMap<>(), new ConcurrentHashMap<Object, Object>())
+                    : existingPair;
+                action.accept(pair);
+                return pair;
+            });
+
+            return functions;
+        });
     }
 
     /**
-     * Obtains the {@code public static final} {@link Function} {@link Field}s that are annotated as both
-     * {@link Indexable} and {@link Dynamic} for the specified {@link Class} (includes {@link Unique} fields).
+     * Runs {@code action} on the existing pair (or {@code null}) for {@code function}, cleaning up empty maps.
+     */
+    private void onExistingNonUniquePair(final Class<?> objectClass,
+                                         final Function<Object, Object> function,
+                                         final UnaryOperator<Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>>> action) {
+        this.objectsByClassIndexableFunctionAndValue.compute(objectClass, (_, existingFunctions) -> {
+            if (existingFunctions == null) {
+                return null;
+            }
+            existingFunctions.compute(function, (_, existingPair) -> action.apply(existingPair));
+            return existingFunctions.isEmpty() ? null : existingFunctions;
+        });
+    }
+
+    /**
+     * Runs {@code action} on the existing pair (or {@code null}) for {@code function}, cleaning up empty maps.
+     */
+    private void onExistingUniquePair(final Class<?> objectClass,
+                                      final Function<Object, Object> function,
+                                      final UnaryOperator<Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Object>>> action) {
+        this.uniqueObjectsByClassFunctionAndKey.compute(objectClass, (_, existingFunctions) -> {
+            if (existingFunctions == null) {
+                return null;
+            }
+            existingFunctions.compute(function, (_, existingPair) -> action.apply(existingPair));
+            return existingFunctions.isEmpty() ? null : existingFunctions;
+        });
+    }
+
+    // ---- pair-level helpers
+
+    private static void putNonUnique(final Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>> pair,
+                                     final Object object,
+                                     final Object indexableValue) {
+        pair.first().put(object, indexableValue);
+        pair.second().compute(indexableValue, (_, existing) -> {
+            final var objects = existing == null ? ConcurrentHashMap.newKeySet() : existing;
+            objects.add(object);
+            return objects;
+        });
+    }
+
+    private static void removeNonUnique(final Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>> pair,
+                                        final Object object) {
+        final var old = pair.first().remove(object);
+        if (old != null) {
+            pair.second().compute(old, (_, existing) -> {
+                if (existing == null) {
+                    return null;
+                }
+                existing.remove(object);
+                return existing.isEmpty() ? null : existing;
+            });
+        }
+    }
+
+    private static void putUnique(final Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Object>> pair,
+                                  final Object object,
+                                  final Object indexableValue,
+                                  final Object rawValue,
+                                  final Class<?> objectClass) {
+        final var displaced = pair.second().putIfAbsent(indexableValue, object);
+        if (displaced != null && displaced != object) {
+            throw new IllegalStateException(
+                "Unique key violation: key [" + rawValue + "] on [" + objectClass.getName() + "] is already held by [" + displaced + "]");
+        }
+        pair.first().put(object, indexableValue);
+    }
+
+    private static void removeUnique(final Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Object>> pair,
+                                     final Object object) {
+        final var key = pair.first().remove(object);
+        if (key != null) {
+            pair.second().remove(key);
+        }
+    }
+
+    // ---- shared utilities
+
+    /**
+     * Returns {@code true} if {@code objectClass} participates in class-membership: either it carries
+     * {@link Indexable} directly, or it declares at least one {@link Indexable} function field.
+     */
+    private boolean isIndexParticipant(final Class<?> objectClass,
+                                       final Streamable<Function<Object, Object>> nonUnique,
+                                       final Streamable<Function<Object, Object>> unique) {
+        return Introspection.hasDeclaredAnnotation(objectClass, Indexable.class)
+            || !nonUnique.isEmpty()
+            || !unique.isEmpty();
+    }
+
+    /**
+     * Replaces {@code null} with {@link #NULL_OBJECT} so that {@code null} values can be stored in
+     * {@link ConcurrentHashMap}s that do not permit {@code null} keys.
+     */
+    private static Object toIndexableValue(final Object value) {
+        return value == null ? NULL_OBJECT : value;
+    }
+
+    /**
+     * Resolves the value of a {@code public static final} {@link Function} {@link Field}, making it accessible
+     * first. Called at memoization time — once per field per class.
+     */
+    @SuppressWarnings("unchecked")
+    private static Function<Object, Object> resolveFunction(final Field field) {
+        try {
+            field.setAccessible(true);
+            return (Function<Object, Object>) field.get(null);
+        } catch (final IllegalAccessException e) {
+            throw new RuntimeException("Cannot access @Indexable field [" + field.getName() + "] on ["
+                + field.getDeclaringClass().getName() + "]", e);
+        }
+    }
+
+    private static boolean isIndexableFunctionField(final Field field) {
+        return field.getAnnotation(Indexable.class) != null
+            && Modifier.isPublic(field.getModifiers())
+            && Modifier.isStatic(field.getModifiers())
+            && Modifier.isFinal(field.getModifiers())
+            && Function.class.isAssignableFrom(field.getType());
+    }
+
+    /**
+     * Obtains the resolved {@link Indexable} (non-{@link Unique}) {@link Function}s for the specified {@link Class}.
      *
      * @param indexableClass the {@link Class} of queryable
-     * @return the {@link Streamable} of {@link Field}s annotated with both {@link Indexable} and {@link Dynamic}
+     * @return the {@link Streamable} of resolved {@link Function}s
      */
-    protected static Streamable<Field> getDynamicIndexableFunctionFields(final Class<?> indexableClass) {
+    protected static Streamable<Function<Object, Object>> resolveIndexableFunctions(final Class<?> indexableClass) {
         return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
-            .filter(field -> field.getAnnotation(Indexable.class) != null
+            .filter(field -> isIndexableFunctionField(field) && field.getAnnotation(Unique.class) == null)
+            .map(AbstractHeapBasedIndex::resolveFunction));
+    }
+
+    /**
+     * Obtains the resolved {@link Indexable} {@link Unique} {@link Function}s for the specified {@link Class}.
+     *
+     * @param indexableClass the {@link Class} of queryable
+     * @return the {@link Streamable} of resolved {@link Function}s
+     */
+    protected static Streamable<Function<Object, Object>> resolveUniqueIndexableFunctions(final Class<?> indexableClass) {
+        return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
+            .filter(field -> isIndexableFunctionField(field) && field.getAnnotation(Unique.class) != null)
+            .map(AbstractHeapBasedIndex::resolveFunction));
+    }
+
+    /**
+     * Obtains the resolved {@link Indexable} {@link Dynamic} (non-{@link Unique}) {@link Function}s for the
+     * specified {@link Class}.
+     *
+     * @param indexableClass the {@link Class} of queryable
+     * @return the {@link Streamable} of resolved {@link Function}s
+     */
+    protected static Streamable<Function<Object, Object>> resolveDynamicNonUniqueFunctions(final Class<?> indexableClass) {
+        return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
+            .filter(field -> isIndexableFunctionField(field)
                 && field.getAnnotation(Dynamic.class) != null
-                && Modifier.isPublic(field.getModifiers())
-                && Modifier.isStatic(field.getModifiers())
-                && Modifier.isFinal(field.getModifiers())
-                && Function.class.isAssignableFrom(field.getType())));
+                && field.getAnnotation(Unique.class) == null)
+            .map(AbstractHeapBasedIndex::resolveFunction));
+    }
+
+    /**
+     * Obtains the resolved {@link Indexable} {@link Dynamic} {@link Unique} {@link Function}s for the specified
+     * {@link Class}.
+     *
+     * @param indexableClass the {@link Class} of queryable
+     * @return the {@link Streamable} of resolved {@link Function}s
+     */
+    protected static Streamable<Function<Object, Object>> resolveDynamicUniqueFunctions(final Class<?> indexableClass) {
+        return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
+            .filter(field -> isIndexableFunctionField(field)
+                && field.getAnnotation(Dynamic.class) != null
+                && field.getAnnotation(Unique.class) != null)
+            .map(AbstractHeapBasedIndex::resolveFunction));
     }
 
     /**
@@ -641,8 +584,8 @@ public abstract class AbstractHeapBasedIndex implements Index {
                 traversalStream = traversedAll == null || !traversedAll.hasNext()
                     ? Stream.empty()
                     : StreamSupport.stream(Spliterators.spliteratorUnknownSize(traversedAll, 0), false)
-                    .filter(this.objectClass::isInstance)
-                    .map(this.objectClass::cast);
+                      .filter(this.objectClass::isInstance)
+                      .map(this.objectClass::cast);
             }
 
             // Concatenate indexed (all assignable subclasses) + traversal, deduplicated by identity
@@ -706,6 +649,28 @@ public abstract class AbstractHeapBasedIndex implements Index {
             return value == null ? (V) NULL_OBJECT : value;
         }
 
+        /**
+         * Returns all unique-index pairs for this function across assignable classes.
+         */
+        private List<Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Object>>> matchingUniquePairs() {
+            return AbstractHeapBasedIndex.this.uniqueObjectsByClassFunctionAndKey.entrySet().stream()
+                .filter(e -> this.select.objectClass.isAssignableFrom(e.getKey()))
+                .map(e -> e.getValue().get(this.function))
+                .filter(Objects::nonNull)
+                .toList();
+        }
+
+        /**
+         * Returns all non-unique index pairs for this function across assignable classes.
+         */
+        private List<Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>>> matchingIndexPairs() {
+            return AbstractHeapBasedIndex.this.objectsByClassIndexableFunctionAndValue.entrySet().stream()
+                .filter(e -> this.select.objectClass.isAssignableFrom(e.getKey()))
+                .map(e -> e.getValue().get(this.function))
+                .filter(Objects::nonNull)
+                .toList();
+        }
+
         @Override
         public IsEqualTo<Q, V> isEqualTo(final V value) {
             return new IsEqualTo<>(this, nonNull(value));
@@ -724,72 +689,63 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
 
     /**
+     * Shared base for the three terminal condition classes, holding the {@link Where} clause and mutable
+     * {@link Scope}.
+     *
+     * @param <Q>    the type of {@link Object} being queried
+     * @param <V>    the type of value extracted by the {@link Where} clause
+     * @param <Self> the concrete terminal type (for the fluent {@link #scope} override)
+     */
+    private abstract class AbstractTerminal<Q, V, Self extends AbstractTerminal<Q, V, Self>>
+        implements Terminal<Q, Self> {
+
+        final Where<Q, V> where;
+        Scope scope;
+
+        AbstractTerminal(final Where<Q, V> where) {
+            this.where = Objects.requireNonNull(where, "The Where must not be null");
+            this.scope = where.select.scope;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public Self scope(final Scope scope) {
+            this.scope = scope == null ? Scope.Direct : scope;
+            return (Self) this;
+        }
+    }
+
+
+    /**
      * A {@link Terminal} implementation for checking if a value is equal to a specified value.
      *
      * @param <Q> the type of {@link Object}
      * @param <V> the type of value
      */
     private class IsEqualTo<Q, V>
-        implements Terminal<Q, IsEqualTo<Q, V>> {
-
-        /**
-         * The {@link Where} condition defining the possibly {@link Indexable} {@link Function} to extract the value.
-         */
-        private final Where<Q, V> where;
+        extends AbstractTerminal<Q, V, IsEqualTo<Q, V>> {
 
         /**
          * The non-{@code null} value to compare against.
          */
         private final V value;
 
-        /**
-         * The {@link Scope} for querying.
-         */
-        private Scope scope;
-
-        /**
-         * Constructs an {@link IsEqualTo} condition with the specified {@link Where} and value.
-         *
-         * @param where the {@link Where} condition
-         * @param value the value to compare against
-         */
-        IsEqualTo(final Where<Q, V> where,
-                  final V value) {
-
-            this.where = Objects.requireNonNull(where, "The Where must not be null");
+        IsEqualTo(final Where<Q, V> where, final V value) {
+            super(where);
             this.value = Objects.requireNonNull(value, "The Value must not be null");
-            this.scope = where.select.scope;
-        }
-
-        @Override
-        public IsEqualTo<Q, V> scope(final Scope scope) {
-            this.scope = scope == null ? Scope.Direct : scope;
-            return this;
         }
 
         @Override
         public Stream<Q> findAll() {
-            // check the unique index across all assignable classes
-            final var uniquePairs = AbstractHeapBasedIndex.this.uniqueObjectsByClassFunctionAndKey.entrySet().stream()
-                .filter(e -> this.where.select.objectClass.isAssignableFrom(e.getKey()))
-                .map(e -> e.getValue().get(this.where.function))
-                .filter(pair -> pair != null)
-                .toList();
-
+            final var uniquePairs = this.where.matchingUniquePairs();
             if (!uniquePairs.isEmpty()) {
                 return uniquePairs.stream()
                     .map(pair -> pair.second().get(this.value))
-                    .filter(obj -> obj != null)
+                    .filter(Objects::nonNull)
                     .map(this.where.select.objectClass::cast);
             }
 
-            // then attempt to use the non-unique function indexed values across all assignable classes
-            final var indexPairs = AbstractHeapBasedIndex.this.objectsByClassIndexableFunctionAndValue.entrySet().stream()
-                .filter(e -> this.where.select.objectClass.isAssignableFrom(e.getKey()))
-                .map(e -> e.getValue().get(this.where.function))
-                .filter(pair -> pair != null)
-                .toList();
-
+            final var indexPairs = this.where.matchingIndexPairs();
             if (!indexPairs.isEmpty()) {
                 return indexPairs.stream()
                     .map(pair -> pair.second().get(this.value))
@@ -798,7 +754,6 @@ public abstract class AbstractHeapBasedIndex implements Index {
                     .map(this.where.select.objectClass::cast);
             }
 
-            // failing that, use the objects provided by the query
             return this.where.select.stream(this.scope)
                 .filter(queryable -> Objects.equals(this.where.nonNull(this.where.function.apply(queryable)), this.value));
         }
@@ -812,52 +767,21 @@ public abstract class AbstractHeapBasedIndex implements Index {
      * @param <V> the type of value
      */
     private class IsNotEqualTo<Q, V>
-        implements Terminal<Q, IsNotEqualTo<Q, V>> {
-
-        /**
-         * The {@link Where} condition defining the possibly {@link Indexable} {@link Function} to extract the value.
-         */
-        private final Where<Q, V> where;
+        extends AbstractTerminal<Q, V, IsNotEqualTo<Q, V>> {
 
         /**
          * The non-{@code null} value to compare against.
          */
         private final V value;
 
-        /**
-         * The {@link Scope} for querying.
-         */
-        private Scope scope;
-
-        /**
-         * Constructs an {@link IsEqualTo} condition with the specified {@link Where} and value.
-         *
-         * @param where the {@link Where} condition
-         * @param value the value to compare against
-         */
-        IsNotEqualTo(final Where<Q, V> where,
-                     final V value) {
-
-            this.where = Objects.requireNonNull(where, "The Where must not be null");
+        IsNotEqualTo(final Where<Q, V> where, final V value) {
+            super(where);
             this.value = Objects.requireNonNull(value, "The Value must not be null");
-            this.scope = where.select.scope;
-        }
-
-        @Override
-        public IsNotEqualTo<Q, V> scope(final Scope scope) {
-            this.scope = scope == null ? Scope.Direct : scope;
-            return this;
         }
 
         @Override
         public Stream<Q> findAll() {
-            // check the unique index across all assignable classes
-            final var uniquePairs = AbstractHeapBasedIndex.this.uniqueObjectsByClassFunctionAndKey.entrySet().stream()
-                .filter(e -> this.where.select.objectClass.isAssignableFrom(e.getKey()))
-                .map(e -> e.getValue().get(this.where.function))
-                .filter(pair -> pair != null)
-                .toList();
-
+            final var uniquePairs = this.where.matchingUniquePairs();
             if (!uniquePairs.isEmpty()) {
                 return uniquePairs.stream()
                     .flatMap(pair -> pair.second().entrySet().stream())
@@ -865,13 +789,7 @@ public abstract class AbstractHeapBasedIndex implements Index {
                     .map(entry -> this.where.select.objectClass.cast(entry.getValue()));
             }
 
-            // then attempt to use the non-unique function indexed values across all assignable classes
-            final var indexPairs = AbstractHeapBasedIndex.this.objectsByClassIndexableFunctionAndValue.entrySet().stream()
-                .filter(e -> this.where.select.objectClass.isAssignableFrom(e.getKey()))
-                .map(e -> e.getValue().get(this.where.function))
-                .filter(pair -> pair != null)
-                .toList();
-
+            final var indexPairs = this.where.matchingIndexPairs();
             if (!indexPairs.isEmpty()) {
                 return indexPairs.stream()
                     .flatMap(pair -> pair.second().entrySet().stream())
@@ -880,12 +798,11 @@ public abstract class AbstractHeapBasedIndex implements Index {
                     .map(this.where.select.objectClass::cast);
             }
 
-            // failing that, use the objects provided by the query
             return this.where.select.stream(this.scope)
-                .filter(queryable ->
-                    !Objects.equals(this.where.nonNull(this.where.function.apply(queryable)), this.value));
+                .filter(queryable -> !Objects.equals(this.where.nonNull(this.where.function.apply(queryable)), this.value));
         }
     }
+
 
     /**
      * A {@link Terminal} implementation for checking if an extracted value matches the specified {@link Predicate}.
@@ -894,78 +811,38 @@ public abstract class AbstractHeapBasedIndex implements Index {
      * @param <V> the type of {@link Predicate} value
      */
     private class Matches<Q, V>
-        implements Terminal<Q, Matches<Q, V>> {
-
-        /**
-         * The {@link Where} condition defining the possibly {@link Indexable} {@link Function} to extract the value.
-         */
-        private final Where<Q, V> where;
+        extends AbstractTerminal<Q, V, Matches<Q, V>> {
 
         /**
          * The {@link Predicate} to compare match.
          */
         private final Predicate<? super V> predicate;
 
-        /**
-         * The {@link Scope} for querying.
-         */
-        private Scope scope;
-
-        /**
-         * Constructs an {@link Matches} condition with the specified {@link Where} and {@link Predicate}.
-         *
-         * @param where     the {@link Where} condition
-         * @param predicate the {@link Predicate}
-         */
-        Matches(final Where<Q, V> where,
-                final Predicate<? super V> predicate) {
-
-            this.where = Objects.requireNonNull(where, "The Where must not be null");
+        Matches(final Where<Q, V> where, final Predicate<? super V> predicate) {
+            super(where);
             this.predicate = Objects.requireNonNull(predicate, "The Predicate must not be null");
-            this.scope = where.select.scope;
-        }
-
-        @Override
-        public Matches<Q, V> scope(final Scope scope) {
-            this.scope = scope == null ? Scope.Direct : scope;
-            return this;
         }
 
         @Override
         @SuppressWarnings("unchecked")
         public Stream<Q> findAll() {
-            // check the unique index across all assignable classes
-            final var uniquePairs = AbstractHeapBasedIndex.this.uniqueObjectsByClassFunctionAndKey.entrySet().stream()
-                .filter(e -> this.where.select.objectClass.isAssignableFrom(e.getKey()))
-                .map(e -> e.getValue().get(this.where.function))
-                .filter(pair -> pair != null)
-                .toList();
-
+            final var uniquePairs = this.where.matchingUniquePairs();
             if (!uniquePairs.isEmpty()) {
                 return uniquePairs.stream()
                     .flatMap(pair -> pair.second().entrySet().stream())
-                    .filter(entry -> this.predicate
-                        .test((V) (entry.getKey() == NULL_OBJECT ? null : entry.getKey())))
+                    .filter(entry -> this.predicate.test((V) (entry.getKey() == NULL_OBJECT ? null : entry.getKey())))
                     .map(entry -> this.where.select.objectClass.cast(entry.getValue()));
             }
 
-            // then attempt to use the non-unique function indexed values across all assignable classes
-            final var indexPairs = AbstractHeapBasedIndex.this.objectsByClassIndexableFunctionAndValue.entrySet().stream()
-                .filter(e -> this.where.select.objectClass.isAssignableFrom(e.getKey()))
-                .map(e -> e.getValue().get(this.where.function))
-                .filter(pair -> pair != null)
-                .toList();
-
+            final var indexPairs = this.where.matchingIndexPairs();
             if (!indexPairs.isEmpty()) {
                 return indexPairs.stream()
                     .flatMap(pair -> pair.second().entrySet().stream())
-                    .filter(entry -> this.predicate
-                        .test((V) ((entry.getKey() == NULL_OBJECT) ? null : entry.getKey())))
+                    .filter(entry -> this.predicate.test((V) (entry.getKey() == NULL_OBJECT ? null : entry.getKey())))
                     .flatMap(entry -> entry.getValue().stream())
                     .map(this.where.select.objectClass::cast);
             }
 
-            // failing that, use the objects provided by the query
             return this.where.select.stream(this.scope)
                 .filter(queryable -> this.predicate.test(this.where.function.apply(queryable)));
         }
