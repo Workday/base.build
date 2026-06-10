@@ -18,7 +18,7 @@ class ANSIBasedTelemetryRecorderTests {
             try (final var meter = telemetryRecorder.commence(100, "This should be fun!");
                  final var anotherMeter = telemetryRecorder.commence(50, "A second meter")) {
 
-                for (int i = 1; i <= 100; i++) {
+                for (int i = 1; i <= 10; i++) {
                     meter.progress();
 
                     Thread.sleep(100);

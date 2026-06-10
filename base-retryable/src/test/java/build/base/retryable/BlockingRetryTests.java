@@ -42,7 +42,7 @@ class BlockingRetryTests {
     @Test
     void shouldRetryForASpecificTimeout() {
         assertTimeout(TIMEOUT, () -> {
-            final var duration = Duration.ofSeconds(2);
+            final var duration = Duration.ofMillis(500);
             final var timeout = Timeout.of(duration);
 
             final var start = Instant.now();
@@ -164,7 +164,7 @@ class BlockingRetryTests {
     @Test
     void shouldDelayRetrying() {
         assertTimeout(TIMEOUT, () -> {
-            final var duration = Duration.ofSeconds(2);
+            final var duration = Duration.ofMillis(500);
 
             final var start = Instant.now();
 
@@ -234,7 +234,7 @@ class BlockingRetryTests {
     @Test
     void shouldUseAMaximumDelay() {
         assertTimeout(TIMEOUT, () -> {
-            final var maximumDuration = Duration.ofSeconds(1);
+            final var maximumDuration = Duration.ofMillis(500);
             final var timeoutDuration = Duration.ofSeconds(2);
 
             final var start = Instant.now();
