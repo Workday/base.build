@@ -46,7 +46,7 @@ class EventuallyTests {
      */
     @Test
     void shouldRetryForASpecificTimeout() {
-        final var duration = Duration.ofSeconds(1);
+        final var duration = Duration.ofMillis(500);
         final var timeout = Timeout.of(duration);
         final var start = Instant.now();
 
@@ -113,7 +113,7 @@ class EventuallyTests {
     @Test
     void shouldRetryRetryableLambdaThrowingARuntimeException() {
 
-        final var duration = Duration.ofSeconds(1);
+        final var duration = Duration.ofMillis(500);
         final var timeout = Timeout.of(duration);
         final var start = Instant.now();
 
@@ -212,7 +212,7 @@ class EventuallyTests {
         final Thread thread = Thread.startVirtualThread(() -> {
             // wait for a second to allow the Eventually to start checking
             try {
-                Thread.sleep(1000);
+                Thread.sleep(500);
             }
             catch (final Exception e) {
 
@@ -255,7 +255,7 @@ class EventuallyTests {
         final Thread thread = Thread.startVirtualThread(() -> {
             // wait for a second to allow the Eventually to start checking
             try {
-                Thread.sleep(1000);
+                Thread.sleep(500);
             }
             catch (final Exception e) {
 
@@ -287,7 +287,7 @@ class EventuallyTests {
     void shouldRetryARunnableThrowingARuntimeException() {
         assertThrows(AssertionError.class, () -> {
             // establish a Timeout for Eventually.assertThat(...)
-            final var duration = Duration.ofSeconds(2);
+            final var duration = Duration.ofMillis(500);
             final var timeout = Timeout.of(duration);
 
             // establish a counter to determine the number of retries
@@ -322,7 +322,7 @@ class EventuallyTests {
     void shouldRetryARunnableThrowingAnAssertionError() {
         assertThrows(AssertionError.class, () -> {
             // establish a Timeout for Eventually.assertThat(...)
-            final var duration = Duration.ofSeconds(2);
+            final var duration = Duration.ofMillis(500);
             final var timeout = Timeout.of(duration);
 
             // establish a counter to determine the number of retries
@@ -355,7 +355,7 @@ class EventuallyTests {
     @Test
     void shouldInvokeARunnableOnceAndOnlyOnce() {
         // establish a Timeout for Eventually.assertThat(...)
-        final var duration = Duration.ofSeconds(2);
+        final var duration = Duration.ofMillis(500);
         final var timeout = Timeout.of(duration);
 
         // establish a counter to determine the number of retries
@@ -386,7 +386,7 @@ class EventuallyTests {
      */
     @Test
     void shouldPreserveUnderlyingCause() {
-        final var timeout = Timeout.of(Duration.ofSeconds(2));
+        final var timeout = Timeout.of(Duration.ofMillis(500));
         final Function<String, String> normalFunction = s -> s;
         final RuntimeException runtimeException = new RuntimeException("exceptional");
         final Function<String, String> exceptionalFunction = s -> {
