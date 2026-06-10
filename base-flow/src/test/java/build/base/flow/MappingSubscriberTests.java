@@ -1,7 +1,6 @@
 package build.base.flow;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -12,6 +11,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since Aug-2018
  */
 class MappingSubscriberTests {
+
+    private static final Subscription NO_OP_SUBSCRIPTION = new Subscription() {
+        @Override public void request(final long number) {}
+        @Override public void cancel() {}
+    };
 
     /**
      * Ensure a {@link MappingSubscriber} can be created.
@@ -27,11 +31,10 @@ class MappingSubscriberTests {
     @Test
     void shouldObserveMapValues() {
 
-        final var subscription = Mockito.mock(Subscription.class);
         final var recordingObserver = new RecordingSubscriber<Integer>();
         final var mappingObserver = MappingSubscriber.of(String::length, recordingObserver);
 
-        mappingObserver.onSubscribe(subscription);
+        mappingObserver.onSubscribe(NO_OP_SUBSCRIPTION);
 
         assertThat(recordingObserver.isSubscribed())
             .isTrue();
@@ -59,11 +62,10 @@ class MappingSubscriberTests {
     @Test
     void shouldObserveCompletionWhenMappingSubscriberObservesCompletion() {
 
-        final var subscription = Mockito.mock(Subscription.class);
         final var recordingObserver = new RecordingSubscriber<Integer>();
         final var mappingObserver = MappingSubscriber.of(String::length, recordingObserver);
 
-        mappingObserver.onSubscribe(subscription);
+        mappingObserver.onSubscribe(NO_OP_SUBSCRIPTION);
 
         mappingObserver.onComplete();
 
@@ -77,11 +79,10 @@ class MappingSubscriberTests {
     @Test
     void shouldObserveAnErrorWhenMappingSubscriberObservesAnError() {
 
-        final var subscription = Mockito.mock(Subscription.class);
         final var recordingObserver = new RecordingSubscriber<Integer>();
         final var mappingObserver = MappingSubscriber.of(String::length, recordingObserver);
 
-        mappingObserver.onSubscribe(subscription);
+        mappingObserver.onSubscribe(NO_OP_SUBSCRIPTION);
 
         assertThat(recordingObserver.isSubscribed())
             .isTrue();

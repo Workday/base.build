@@ -10,6 +10,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Stack;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static build.base.retryable.ConditionallyRetryable.retrying;
 import static java.time.Duration.ofMillis;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,10 +19,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeout;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Tests for {@link BlockingRetry}.
@@ -189,14 +187,14 @@ class BlockingRetryTests {
      * Ensure a {@link BlockingRetry} retries a final time after timing out
      */
     @Test
-    @SuppressWarnings("unchecked")
     void shouldDelayRetryingFinalTime() {
         assertTimeout(TIMEOUT, () -> {
 
-            final Retryable<Integer> retryable = mock(Retryable.class);
-            when(retryable.get())
-                .thenThrow(new EphemeralFailureException("First Failure"))
-                .thenReturn(123);
+            final AtomicInteger calls = new AtomicInteger();
+            final Retryable<Integer> retryable = () -> {
+                if (calls.incrementAndGet() == 1) throw new EphemeralFailureException("First Failure");
+                return 123;
+            };
 
             final var value = BlockingRetry.retry(
                 retryable,
@@ -205,8 +203,7 @@ class BlockingRetryTests {
                 RetryFrequency.once(Duration.ofMinutes(1)));
 
             assertEquals(123, value);
-
-            verify(retryable, times(2)).get();
+            assertEquals(2, calls.get());
         });
     }
 
@@ -214,17 +211,18 @@ class BlockingRetryTests {
      * Ensure a {@link BlockingRetry} with a timeout of 0 only executes the {@link Retryable} once
      */
     @Test
-    @SuppressWarnings("unchecked")
     void shouldRetryOnceWithZeroTimeout() {
         assertTimeout(TIMEOUT, () -> {
 
-            final Retryable<Integer> retryable = mock(Retryable.class);
-            when(retryable.get())
-                .thenThrow(new EphemeralFailureException("First Failure"));
+            final AtomicInteger calls = new AtomicInteger();
+            final Retryable<Integer> retryable = () -> {
+                calls.incrementAndGet();
+                throw new EphemeralFailureException("First Failure");
+            };
 
             assertThrows(PermanentFailureException.class, () -> BlockingRetry.retry(retryable, Timeout.ofMillis(0)));
 
-            verify(retryable, times(1)).get();
+            assertEquals(1, calls.get());
         });
     }
 
@@ -390,29 +388,28 @@ class BlockingRetryTests {
      * laundered
      */
     @Test
-    @SuppressWarnings("unchecked")
     void shouldRetryWhenErrorAndRuntimeExceptionsAreExperienced() {
-        final Retryable<Integer> retryable = mock(Retryable.class);
-        when(retryable.isDone()).thenReturn(false);
-        when(retryable.get())
-            .thenThrow(AssertionError.class)
-            .thenThrow(RuntimeException.class)
-            .thenThrow(Error.class);
+        final AtomicInteger calls = new AtomicInteger();
+        final Retryable<Integer> retryable = () -> {
+            switch (calls.incrementAndGet()) {
+                case 1: throw new AssertionError();
+                case 2: throw new RuntimeException();
+                default: throw new Error();
+            }
+        };
 
         assertThrows(Error.class, () -> BlockingRetry.retry(retryable));
-        verify(retryable, times(3)).get();
+        assertEquals(3, calls.get());
     }
 
     /**
      * Ensure that a {@link Retryable} times out before a {@link MinimumDelay}.
      */
     @Test
-    @SuppressWarnings("unchecked")
     void shouldTimeoutBeforeMinimumDelay() {
         assertTimeout(TIMEOUT, () -> {
 
-            final Retryable<Integer> retryable = mock(Retryable.class);
-            when(retryable.get()).thenReturn(123);
+            final Retryable<Integer> retryable = () -> 123;
 
             final int value = BlockingRetry.retry(retryable,
                 Timeout.ofMillis(1),

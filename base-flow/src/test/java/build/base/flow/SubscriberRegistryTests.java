@@ -1,16 +1,13 @@
 package build.base.flow;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doCallRealMethod;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link SubscriberRegistry}s.
@@ -29,31 +26,19 @@ class SubscriberRegistryTests {
     }
 
     /**
-     * Creates an unbounded mocked {@link Subscriber}.
-     *
-     * @return a {@link Subscriber}
-     */
-    @SuppressWarnings("unchecked")
-    private <T> Subscriber<T> createUnboundedMockSubscriber() {
-        final Subscriber<T> subscriber = Mockito.mock(Subscriber.class);
-        doCallRealMethod().when(subscriber).onSubscribe(any());
-        return subscriber;
-    }
-
-    /**
      * Ensure a {@link Subscriber} can be subscribed to a {@link SubscriberRegistry}.
      */
     @Test
     void shouldSubscribe() {
         final SubscriberRegistry<String> subscriberRegistry = new SubscriberRegistry<>();
 
-        final Subscriber<String> subscriber = createUnboundedMockSubscriber();
+        final TrackingSubscriber<String> subscriber = new TrackingSubscriber<>();
         subscriberRegistry.subscribe(subscriber);
 
-        verify(subscriber, times(1)).onSubscribe(any());
-        verify(subscriber, times(0)).onNext(any());
-        verify(subscriber, times(0)).onComplete();
-        verify(subscriber, times(0)).onError(any());
+        assertThat(subscriber.subscription()).isNotNull();
+        assertThat(subscriber.items()).isEmpty();
+        assertThat(subscriber.isCompleted()).isFalse();
+        assertThat(subscriber.throwable()).isEmpty();
     }
 
     /**
@@ -63,22 +48,20 @@ class SubscriberRegistryTests {
     void shouldCancelSubscription() {
         final SubscriberRegistry<String> subscriberRegistry = new SubscriberRegistry<>();
 
-        final Subscriber<String> subscriber = createUnboundedMockSubscriber();
+        final TrackingSubscriber<String> subscriber = new TrackingSubscriber<>();
         subscriberRegistry.subscribe(subscriber);
 
-        final ArgumentCaptor<Subscription> captor = ArgumentCaptor.forClass(Subscription.class);
+        assertThat(subscriber.subscription()).isNotNull();
+        assertThat(subscriber.items()).isEmpty();
+        assertThat(subscriber.isCompleted()).isFalse();
+        assertThat(subscriber.throwable()).isEmpty();
 
-        verify(subscriber, times(1)).onSubscribe(captor.capture());
-        verify(subscriber, times(0)).onNext(any());
-        verify(subscriber, times(0)).onComplete();
-        verify(subscriber, times(0)).onError(any());
+        subscriber.subscription().cancel();
 
-        captor.getValue().cancel();
-
-        verify(subscriber, times(1)).onSubscribe(any());
-        verify(subscriber, times(0)).onNext(any());
-        verify(subscriber, times(1)).onComplete();
-        verify(subscriber, times(0)).onError(any());
+        assertThat(subscriber.subscription()).isNotNull();
+        assertThat(subscriber.items()).isEmpty();
+        assertThat(subscriber.isCompleted()).isTrue();
+        assertThat(subscriber.throwable()).isEmpty();
     }
 
     /**
@@ -88,21 +71,19 @@ class SubscriberRegistryTests {
     void shouldObserveAnItem() {
         final SubscriberRegistry<String> subscriberRegistry = new SubscriberRegistry<>();
 
-        final Subscriber<String> subscriber = createUnboundedMockSubscriber();
+        final TrackingSubscriber<String> subscriber = new TrackingSubscriber<>();
         subscriberRegistry.subscribe(subscriber);
 
         final String message = "G'day Mate";
 
         subscriberRegistry.publish(message);
 
-        final ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        assertThat(subscriber.subscription()).isNotNull();
+        assertThat(subscriber.items()).hasSize(1);
+        assertThat(subscriber.isCompleted()).isFalse();
+        assertThat(subscriber.throwable()).isEmpty();
 
-        verify(subscriber, times(1)).onSubscribe(any());
-        verify(subscriber, times(1)).onNext(captor.capture());
-        verify(subscriber, times(0)).onComplete();
-        verify(subscriber, times(0)).onError(any());
-
-        assertThat(captor.getValue())
+        assertThat(subscriber.items().getFirst())
             .isEqualTo(message);
     }
 
@@ -113,15 +94,15 @@ class SubscriberRegistryTests {
     void shouldObserveCompletion() {
         final SubscriberRegistry<String> subscriberRegistry = new SubscriberRegistry<>();
 
-        final Subscriber<String> subscriber = createUnboundedMockSubscriber();
+        final TrackingSubscriber<String> subscriber = new TrackingSubscriber<>();
         subscriberRegistry.subscribe(subscriber);
 
         subscriberRegistry.complete();
 
-        verify(subscriber, times(1)).onSubscribe(any());
-        verify(subscriber, times(0)).onNext(any());
-        verify(subscriber, times(1)).onComplete();
-        verify(subscriber, times(0)).onError(any());
+        assertThat(subscriber.subscription()).isNotNull();
+        assertThat(subscriber.items()).isEmpty();
+        assertThat(subscriber.isCompleted()).isTrue();
+        assertThat(subscriber.throwable()).isEmpty();
     }
 
     /**
@@ -131,21 +112,16 @@ class SubscriberRegistryTests {
     void shouldObserveAnError() {
         final SubscriberRegistry<String> subscriberRegistry = new SubscriberRegistry<>();
 
-        final Subscriber<String> subscriber = createUnboundedMockSubscriber();
+        final TrackingSubscriber<String> subscriber = new TrackingSubscriber<>();
         subscriberRegistry.subscribe(subscriber);
 
         final Throwable throwable = new RuntimeException("Oops!");
         subscriberRegistry.error(throwable);
 
-        final ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
-
-        verify(subscriber, times(1)).onSubscribe(any());
-        verify(subscriber, times(0)).onNext(any());
-        verify(subscriber, times(0)).onComplete();
-        verify(subscriber, times(1)).onError(captor.capture());
-
-        assertThat(captor.getValue())
-            .isEqualTo(throwable);
+        assertThat(subscriber.subscription()).isNotNull();
+        assertThat(subscriber.items()).isEmpty();
+        assertThat(subscriber.isCompleted()).isFalse();
+        assertThat(subscriber.throwable()).contains(throwable);
     }
 
     /**
@@ -156,21 +132,17 @@ class SubscriberRegistryTests {
     void shouldNotObserveItemDuringSubscription() {
         final SubscriberRegistry<String> subscriberRegistry = new SubscriberRegistry<>();
 
-        final Subscriber<String> subscriber = createUnboundedMockSubscriber();
-
-        doAnswer(invocation -> {
-            invocation.getArgument(0, Subscription.class).request(Long.MAX_VALUE);
-
+        final TrackingSubscriber<String> subscriber = new TrackingSubscriber<>(subscription -> {
+            subscription.request(Long.MAX_VALUE);
             subscriberRegistry.publish("Should Never See This!");
-            return null;
-        }).when(subscriber).onSubscribe(any());
+        });
 
         subscriberRegistry.subscribe(subscriber);
 
-        verify(subscriber, times(1)).onSubscribe(any());
-        verify(subscriber, times(0)).onNext(any());
-        verify(subscriber, times(0)).onComplete();
-        verify(subscriber, times(0)).onError(any());
+        assertThat(subscriber.subscription()).isNotNull();
+        assertThat(subscriber.items()).isEmpty();
+        assertThat(subscriber.isCompleted()).isFalse();
+        assertThat(subscriber.throwable()).isEmpty();
     }
 
     /**
@@ -181,20 +153,14 @@ class SubscriberRegistryTests {
     void shouldCancelDuringSubscription() {
         final SubscriberRegistry<String> subscriberRegistry = new SubscriberRegistry<>();
 
-        final Subscriber<String> subscriber = createUnboundedMockSubscriber();
-
-        doAnswer(invocation -> {
-            final Subscription subscription = invocation.getArgument(0);
-            subscription.cancel();
-            return null;
-        }).when(subscriber).onSubscribe(any());
+        final TrackingSubscriber<String> subscriber = new TrackingSubscriber<>(Subscription::cancel);
 
         subscriberRegistry.subscribe(subscriber);
 
-        verify(subscriber, times(1)).onSubscribe(any());
-        verify(subscriber, times(0)).onNext(any());
-        verify(subscriber, times(1)).onComplete();
-        verify(subscriber, times(0)).onError(any());
+        assertThat(subscriber.subscription()).isNotNull();
+        assertThat(subscriber.items()).isEmpty();
+        assertThat(subscriber.isCompleted()).isTrue();
+        assertThat(subscriber.throwable()).isEmpty();
     }
 
     /**
@@ -204,7 +170,7 @@ class SubscriberRegistryTests {
     void shouldObserveItemsInOrder() {
         final SubscriberRegistry<Integer> subscriberRegistry = new SubscriberRegistry<>();
 
-        final Subscriber<Integer> subscriber = createUnboundedMockSubscriber();
+        final TrackingSubscriber<Integer> subscriber = new TrackingSubscriber<>();
         subscriberRegistry.subscribe(subscriber);
 
         subscriberRegistry.publish(1);
@@ -212,14 +178,12 @@ class SubscriberRegistryTests {
         subscriberRegistry.publish(3);
         subscriberRegistry.publish(4);
 
-        final ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);
+        assertThat(subscriber.subscription()).isNotNull();
+        assertThat(subscriber.items()).hasSize(4);
+        assertThat(subscriber.isCompleted()).isFalse();
+        assertThat(subscriber.throwable()).isEmpty();
 
-        verify(subscriber, times(1)).onSubscribe(any());
-        verify(subscriber, times(4)).onNext(captor.capture());
-        verify(subscriber, times(0)).onComplete();
-        verify(subscriber, times(0)).onError(any());
-
-        assertThat(captor.getAllValues())
+        assertThat(subscriber.items())
             .containsExactly(1, 2, 3, 4);
     }
 
@@ -230,7 +194,7 @@ class SubscriberRegistryTests {
     void shouldPublishAndComplete() {
         final SubscriberRegistry<String> registry = new SubscriberRegistry<>();
 
-        final Subscriber<String> subscriber = createUnboundedMockSubscriber();
+        final TrackingSubscriber<String> subscriber = new TrackingSubscriber<>();
         registry.subscribe(subscriber);
 
         final String message = "G'day Mate";
@@ -242,17 +206,15 @@ class SubscriberRegistryTests {
 
         registry.complete();
 
-        final ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-
-        verify(subscriber, times(1)).onSubscribe(any());
-        verify(subscriber, times(1)).onNext(captor.capture());
-        verify(subscriber, times(1)).onComplete();
-        verify(subscriber, times(0)).onError(any());
+        assertThat(subscriber.subscription()).isNotNull();
+        assertThat(subscriber.items()).hasSize(1);
+        assertThat(subscriber.isCompleted()).isTrue();
+        assertThat(subscriber.throwable()).isEmpty();
 
         assertThat(registry.onComplete())
             .isCompleted();
 
-        assertThat(captor.getValue())
+        assertThat(subscriber.items().getFirst())
             .isEqualTo(message);
     }
 
@@ -263,7 +225,7 @@ class SubscriberRegistryTests {
     void shouldPublishAndCompleteDueToError() {
         final SubscriberRegistry<String> registry = new SubscriberRegistry<>();
 
-        final Subscriber<String> subscriber = createUnboundedMockSubscriber();
+        final TrackingSubscriber<String> subscriber = new TrackingSubscriber<>();
         registry.subscribe(subscriber);
 
         final String message = "G'day Mate";
@@ -272,39 +234,33 @@ class SubscriberRegistryTests {
         registry.publish(message);
         registry.error(throwable);
 
-        final ArgumentCaptor<String> itemCaptor = ArgumentCaptor.forClass(String.class);
-        final ArgumentCaptor<Throwable> throwableCaptor = ArgumentCaptor.forClass(Throwable.class);
+        assertThat(subscriber.subscription()).isNotNull();
+        assertThat(subscriber.items()).hasSize(1);
+        assertThat(subscriber.isCompleted()).isFalse();
 
-        verify(subscriber, times(1)).onSubscribe(any());
-        verify(subscriber, times(1)).onNext(itemCaptor.capture());
-        verify(subscriber, times(0)).onComplete();
-        verify(subscriber, times(1)).onError(throwableCaptor.capture());
-
-        assertThat(itemCaptor.getValue())
+        assertThat(subscriber.items().getFirst())
             .isEqualTo(message);
 
-        assertThat(throwableCaptor.getValue())
-            .isEqualTo(throwable);
+        assertThat(subscriber.throwable())
+            .contains(throwable);
     }
 
     /**
      * Ensure {@link SubscriberRegistry} prevents subscription once publishing has completed.
      */
     @Test
-    @SuppressWarnings("unchecked")
     void shouldPreventSubscriptionWhenCompleted() {
         final SubscriberRegistry<String> registry = new SubscriberRegistry<>();
 
         registry.complete();
 
-        assertThrows(IllegalStateException.class, () -> registry.subscribe(Mockito.mock(Subscriber.class)));
+        assertThrows(IllegalStateException.class, () -> registry.subscribe(item -> {}));
     }
 
     /**
      * Ensure {@link SubscriberRegistry} prevents subscription once publishing has completed due to a error.
      */
     @Test
-    @SuppressWarnings("unchecked")
     void shouldPreventSubscriptionWhenError() {
         final SubscriberRegistry<String> registry = new SubscriberRegistry<>();
         final Throwable throwable = new RuntimeException("Oops!");
@@ -312,7 +268,7 @@ class SubscriberRegistryTests {
         registry.error(throwable);
 
         final Throwable cause = assertThrows(IllegalStateException.class,
-            () -> registry.subscribe(Mockito.mock(Subscriber.class)));
+            () -> registry.subscribe(item -> {}));
 
         assertThat(cause.getCause())
             .isEqualTo(throwable);
@@ -338,5 +294,67 @@ class SubscriberRegistryTests {
 
         assertThat(thirdTry)
             .isFalse();
+    }
+
+    /**
+     * A {@link Subscriber} that records all interactions for assertion in tests.
+     */
+    private static class TrackingSubscriber<T> implements Subscriber<T> {
+
+        @FunctionalInterface
+        interface OnSubscribe {
+            void accept(Subscription subscription);
+        }
+
+        private final List<T> items = new ArrayList<>();
+        private final OnSubscribe onSubscribeAction;
+        private Subscription subscription;
+        private Throwable throwable;
+        private boolean completed;
+
+        TrackingSubscriber() {
+            this(s -> s.request(Long.MAX_VALUE));
+        }
+
+        TrackingSubscriber(final OnSubscribe onSubscribeAction) {
+            this.onSubscribeAction = onSubscribeAction;
+        }
+
+        @Override
+        public void onSubscribe(final Subscription subscription) {
+            this.subscription = subscription;
+            this.onSubscribeAction.accept(subscription);
+        }
+
+        @Override
+        public void onNext(final T item) {
+            this.items.add(item);
+        }
+
+        @Override
+        public void onError(final Throwable throwable) {
+            this.throwable = throwable;
+        }
+
+        @Override
+        public void onComplete() {
+            this.completed = true;
+        }
+
+        Subscription subscription() {
+            return this.subscription;
+        }
+
+        List<T> items() {
+            return this.items;
+        }
+
+        Optional<Throwable> throwable() {
+            return Optional.ofNullable(this.throwable);
+        }
+
+        boolean isCompleted() {
+            return this.completed;
+        }
     }
 }

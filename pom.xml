@@ -70,7 +70,6 @@
         <junit.version>6.0.3</junit.version>
         <jakarta-inject.version>2.0.1</jakarta-inject.version>
         <jakarta-el-api.version>6.0.1</jakarta-el-api.version>
-        <mockito.version>5.23.0</mockito.version>
 
         <!-- Plugin Dependency Versions -->
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
@@ -291,11 +290,6 @@
                 <groupId>org.junit.jupiter</groupId>
                 <artifactId>junit-jupiter-params</artifactId>
                 <version>${junit.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.mockito</groupId>
-                <artifactId>mockito-core</artifactId>
-                <version>${mockito.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
