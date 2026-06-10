@@ -10,11 +10,9 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Tests for {@link Configuration}s.
@@ -128,22 +126,19 @@ class ConfigurationTests {
      * Ensure that a provided {@link Supplier} is not invoked when an {@link Option} is present.
      */
     @Test
-    @SuppressWarnings("unchecked")
     void shouldAvoidSupplierWhenNonNull() {
         final var configuration = ConfigurationBuilder.create()
             .add(Color.GREEN)
             .build();
 
-        // establish a mock supplier for the Color.BLUE
-        // (so we can track interactions with the supplier)
-        final Supplier<Color> blueSupplier = mock(Supplier.class);
-        when(blueSupplier.get()).thenReturn(Color.BLUE);
+        final var supplierCalled = new AtomicBoolean(false);
 
-        assertThat(configuration.getOrDefault(Color.class, blueSupplier))
-            .isEqualTo(Color.GREEN);
+        assertThat(configuration.getOrDefault(Color.class, () -> {
+            supplierCalled.set(true);
+            return Color.BLUE;
+        })).isEqualTo(Color.GREEN);
 
-        // ensure the supplier was never used
-        verify(blueSupplier, times(0)).get();
+        assertThat(supplierCalled).isFalse();
     }
 
     /**

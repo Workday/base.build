@@ -1,7 +1,6 @@
 package build.base.flow;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -12,6 +11,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since Aug-2018
  */
 class FilteringSubscriberTests {
+
+    private static final Subscription NO_OP_SUBSCRIPTION = new Subscription() {
+        @Override public void request(final long number) {}
+        @Override public void cancel() {}
+    };
 
     /**
      * Ensure a {@link FilteringSubscriber} can be created.
@@ -28,11 +32,10 @@ class FilteringSubscriberTests {
     @Test
     void shouldObserveFilteredValues() {
 
-        final var subscription = Mockito.mock(Subscription.class);
         final var recordingSubscriber = new RecordingSubscriber<String>();
         final var filteringObserver = FilteringSubscriber.of(s -> s.startsWith("Hello"), recordingSubscriber);
 
-        filteringObserver.onSubscribe(subscription);
+        filteringObserver.onSubscribe(NO_OP_SUBSCRIPTION);
 
         assertThat(recordingSubscriber.isSubscribed())
             .isTrue();
@@ -71,11 +74,10 @@ class FilteringSubscriberTests {
     @Test
     void shouldObserveCompletionWhenFilteringSubscriberObservesCompletion() {
 
-        final var subscription = Mockito.mock(Subscription.class);
         final var recordingSubscriber = new RecordingSubscriber<String>();
         final var filteringObserver = FilteringSubscriber.of(s -> s.startsWith("Hello"), recordingSubscriber);
 
-        filteringObserver.onSubscribe(subscription);
+        filteringObserver.onSubscribe(NO_OP_SUBSCRIPTION);
 
         filteringObserver.onComplete();
 
@@ -89,12 +91,10 @@ class FilteringSubscriberTests {
     @Test
     void shouldObserveAnErrorWhenFilteringObserverObservesAnError() {
 
-        final var subscription = Mockito.mock(Subscription.class);
-
         final var recordingSubscriber = new RecordingSubscriber<String>();
         final var filteringObserver = FilteringSubscriber.of(s -> s.startsWith("Hello"), recordingSubscriber);
 
-        filteringObserver.onSubscribe(subscription);
+        filteringObserver.onSubscribe(NO_OP_SUBSCRIPTION);
 
         assertThat(recordingSubscriber.isSubscribed())
             .isTrue();
