@@ -27,6 +27,7 @@ import build.base.foundation.tuple.Pair;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -55,6 +56,13 @@ public abstract class AbstractHeapBasedIndex implements Index {
      * {@link Object} index.
      */
     private static final Object NULL_OBJECT = new Object();
+
+    /**
+     * Wraps the set of element-keys stored in the reverse index for a multi-valued {@link Indexable} function,
+     * distinguishing it from a plain scalar value stored in the same map.
+     */
+    private record MultiValuedKeys(Set<Object> keys) {
+    }
 
     /**
      * The {@link Object}s known to the index by {@link Class}.
@@ -104,6 +112,18 @@ public abstract class AbstractHeapBasedIndex implements Index {
     private final Memoizer<Class<?>, Streamable<Function<Object, Object>>> dynamicUniqueFunctionsByClass;
 
     /**
+     * The resolved {@link Indexable#each() each} (non-{@link Unique}) {@link Function}s per {@link Class}, memoized
+     * so that reflection is performed at most once per class.
+     */
+    private final Memoizer<Class<?>, Streamable<Function<Object, Object>>> eachFunctionsByClass;
+
+    /**
+     * The resolved {@link Indexable#each() each} {@link Dynamic} (non-{@link Unique}) {@link Function}s per
+     * {@link Class}, memoized so that reflection is performed at most once per class.
+     */
+    private final Memoizer<Class<?>, Streamable<Function<Object, Object>>> dynamicEachFunctionsByClass;
+
+    /**
      * Constructs an empty {@link AbstractHeapBasedIndex}.
      */
     protected AbstractHeapBasedIndex() {
@@ -114,18 +134,22 @@ public abstract class AbstractHeapBasedIndex implements Index {
         this.uniqueIndexableFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveUniqueIndexableFunctions);
         this.dynamicNonUniqueFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveDynamicNonUniqueFunctions);
         this.dynamicUniqueFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveDynamicUniqueFunctions);
+        this.eachFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveEachFunctions);
+        this.dynamicEachFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveDynamicEachFunctions);
     }
 
     @Override
     public void index(final Object object) {
         final var objectClass = object.getClass();
         final var nonUniqueFunctions = this.indexableFunctionsByClass.compute(objectClass);
+        final var eachFunctions = this.eachFunctionsByClass.compute(objectClass);
         final var uniqueFunctions = this.uniqueIndexableFunctionsByClass.compute(objectClass);
 
         nonUniqueFunctions.forEach(function -> indexNonUnique(objectClass, function, object));
+        eachFunctions.forEach(function -> indexEach(objectClass, function, object));
         uniqueFunctions.forEach(function -> indexUnique(objectClass, function, object));
 
-        if (isIndexParticipant(objectClass, nonUniqueFunctions, uniqueFunctions)) {
+        if (isIndexParticipant(objectClass, nonUniqueFunctions, eachFunctions, uniqueFunctions)) {
             this.objectByClass.compute(objectClass, (_, existing) -> {
                 final var objects = existing == null ? ConcurrentHashMap.newKeySet() : existing;
                 objects.add(object);
@@ -138,12 +162,14 @@ public abstract class AbstractHeapBasedIndex implements Index {
     public void unindex(final Object object) {
         final var objectClass = object.getClass();
         final var nonUniqueFunctions = this.indexableFunctionsByClass.compute(objectClass);
+        final var eachFunctions = this.eachFunctionsByClass.compute(objectClass);
         final var uniqueFunctions = this.uniqueIndexableFunctionsByClass.compute(objectClass);
 
         nonUniqueFunctions.forEach(function -> unindexNonUnique(objectClass, function, object));
+        eachFunctions.forEach(function -> unindexNonUnique(objectClass, function, object));
         uniqueFunctions.forEach(function -> unindexUnique(objectClass, function, object));
 
-        if (isIndexParticipant(objectClass, nonUniqueFunctions, uniqueFunctions)) {
+        if (isIndexParticipant(objectClass, nonUniqueFunctions, eachFunctions, uniqueFunctions)) {
             this.objectByClass.compute(objectClass, (_, existing) -> {
                 if (existing == null) {
                     return null;
@@ -158,6 +184,7 @@ public abstract class AbstractHeapBasedIndex implements Index {
     public void reindexDynamic(final Object object) {
         final var objectClass = object.getClass();
         this.dynamicNonUniqueFunctionsByClass.compute(objectClass).forEach(function -> reindexNonUnique(objectClass, function, object));
+        this.dynamicEachFunctionsByClass.compute(objectClass).forEach(function -> reindexEach(objectClass, function, object));
         this.dynamicUniqueFunctionsByClass.compute(objectClass).forEach(function -> reindexUnique(objectClass, function, object));
     }
 
@@ -225,6 +252,18 @@ public abstract class AbstractHeapBasedIndex implements Index {
         });
     }
 
+    private void indexEach(final Class<?> objectClass, final Function<Object, Object> function, final Object object) {
+        onNonUniquePair(objectClass, function, pair -> {
+            try {
+                indexMultiValued(object, toElementStream(function.apply(object), objectClass), pair);
+            } catch (final UnsupportedOperationException e) {
+                throw e;
+            } catch (final Throwable e) {
+                throw new UnsupportedOperationException("Failed to index [" + objectClass.getName() + "] as an each function failed to extract elements from the object", e);
+            }
+        });
+    }
+
     private void indexUnique(final Class<?> objectClass, final Function<Object, Object> function, final Object object) {
         onUniquePair(objectClass, function, pair -> {
             try {
@@ -265,6 +304,19 @@ public abstract class AbstractHeapBasedIndex implements Index {
                 putNonUnique(pair, object, toIndexableValue(function.apply(object)));
             } catch (final Throwable e) {
                 throw new UnsupportedOperationException("Failed to reindex [" + objectClass.getName() + "] as a dynamic function failed to extract a value from the object", e);
+            }
+        });
+    }
+
+    private void reindexEach(final Class<?> objectClass, final Function<Object, Object> function, final Object object) {
+        onNonUniquePair(objectClass, function, pair -> {
+            removeNonUnique(pair, object);
+            try {
+                indexMultiValued(object, toElementStream(function.apply(object), objectClass), pair);
+            } catch (final UnsupportedOperationException e) {
+                throw e;
+            } catch (final Throwable e) {
+                throw new UnsupportedOperationException("Failed to reindex [" + objectClass.getName() + "] as a dynamic each function failed to extract elements from the object", e);
             }
         });
     }
@@ -363,6 +415,21 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
     // ---- pair-level helpers
 
+    private static Stream<Object> toElementStream(final Object value, final Class<?> objectClass) {
+        if (value instanceof Stream<?> s) {
+            return s.map(e -> e == null ? NULL_OBJECT : e);
+        } else if (value instanceof Collection<?> c) {
+            return c.stream().map(e -> e == null ? NULL_OBJECT : e);
+        } else if (value instanceof Iterable<?> it) {
+            return StreamSupport.stream(it.spliterator(), false).map(e -> e == null ? NULL_OBJECT : e);
+        } else {
+            throw new UnsupportedOperationException(
+                "@Indexable(each = true) function on [" + objectClass.getName()
+                    + "] must return a Stream, Collection, or Iterable, but returned ["
+                    + (value == null ? "null" : value.getClass().getName()) + "]");
+        }
+    }
+
     private static void putNonUnique(final Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>> pair,
                                      final Object object,
                                      final Object indexableValue) {
@@ -377,7 +444,17 @@ public abstract class AbstractHeapBasedIndex implements Index {
     private static void removeNonUnique(final Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>> pair,
                                         final Object object) {
         final var old = pair.first().remove(object);
-        if (old != null) {
+        if (old instanceof MultiValuedKeys(Set<Object> keys)) {
+            for (final var key : keys) {
+                pair.second().compute(key, (_, existing) -> {
+                    if (existing == null) {
+                        return null;
+                    }
+                    existing.remove(object);
+                    return existing.isEmpty() ? null : existing;
+                });
+            }
+        } else if (old != null) {
             pair.second().compute(old, (_, existing) -> {
                 if (existing == null) {
                     return null;
@@ -417,9 +494,11 @@ public abstract class AbstractHeapBasedIndex implements Index {
      */
     private boolean isIndexParticipant(final Class<?> objectClass,
                                        final Streamable<Function<Object, Object>> nonUnique,
+                                       final Streamable<Function<Object, Object>> each,
                                        final Streamable<Function<Object, Object>> unique) {
         return Introspection.hasDeclaredAnnotation(objectClass, Indexable.class)
             || !nonUnique.isEmpty()
+            || !each.isEmpty()
             || !unique.isEmpty();
     }
 
@@ -455,6 +534,118 @@ public abstract class AbstractHeapBasedIndex implements Index {
     }
 
     /**
+     * Indexes each element produced by a multi-valued {@link Indexable} function into the forward and reverse maps.
+     *
+     * @param object   the object being indexed
+     * @param elements the stream of non-{@code null} element keys (nulls already replaced with {@link #NULL_OBJECT})
+     * @param pair     the pair of reverse and forward maps for the function
+     */
+    private static void indexMultiValued(final Object object,
+                                         final Stream<Object> elements,
+                                         final Pair<ConcurrentHashMap<Object, Object>, ConcurrentHashMap<Object, Set<Object>>> pair) {
+
+        final var keys = ConcurrentHashMap.newKeySet();
+
+        elements.forEach(key -> {
+            keys.add(key);
+            pair.second().compute(key, (_, existing) -> {
+                final var set = existing == null ? ConcurrentHashMap.newKeySet() : existing;
+                set.add(object);
+                return set;
+            });
+        });
+
+        pair.first().put(object, new MultiValuedKeys(keys));
+    }
+
+    /**
+     * A {@link Terminal} implementation for checking membership in a multi-valued extracted value.
+     * <p>
+     * When the underlying {@link Indexable} function has been indexed, performs an O(1) reverse-map lookup because
+     * each element was stored as an individual key during {@link #index(Object)}. Falls back to a linear scan that
+     * re-invokes the function and tests containment for unindexed objects.
+     *
+     * @param <Q> the type of {@link Object} being queried
+     * @param <V> the type of value extracted by the {@link Where} clause
+     */
+    private class Contains<Q, V>
+        extends AbstractTerminal<Q, V, Contains<Q, V>> {
+
+        private final Object element;
+
+        Contains(final Where<Q, V> where,
+                 final Object element) {
+
+            super(where);
+            this.element = element;
+        }
+
+        @Override
+        public Stream<Q> findAll() {
+            final var key = this.element == null ? NULL_OBJECT : this.element;
+
+            final var indexPairs = this.where.matchingIndexPairs();
+            if (!indexPairs.isEmpty()) {
+                return indexPairs.stream()
+                    .map(pair -> pair.second().get(key))
+                    .filter(objects -> objects != null && !objects.isEmpty())
+                    .flatMap(Set::stream)
+                    .map(this.where.select.objectClass::cast);
+            }
+
+            // fallback: linear scan with containment check
+            return this.where.select.stream(this.scope)
+                .filter(q -> containsElement(this.where.function.apply(q), this.element));
+        }
+
+        static boolean containsElement(final Object container, final Object element) {
+            if (container instanceof Collection<?> c) {
+                return c.contains(element);
+            }
+            if (container instanceof Stream<?> s) {
+                return s.anyMatch(e -> Objects.equals(e, element));
+            }
+            if (container instanceof Iterable<?> it) {
+                for (final var e : it) {
+                    if (Objects.equals(e, element)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            return Objects.equals(container, element);
+        }
+    }
+
+    /**
+     * A {@link Terminal} implementation for checking that an element is absent from a multi-valued extracted value.
+     * <p>
+     * Always performs a linear scan. The reverse index only supports positive membership lookups; negation would
+     * require enumerating all objects and subtracting those in the membership set, which is no better than scanning.
+     *
+     * @param <Q> the type of {@link Object} being queried
+     * @param <V> the type of value extracted by the {@link Where} clause
+     */
+    private class DoesNotContain<Q, V>
+        extends AbstractTerminal<Q, V, DoesNotContain<Q, V>> {
+
+        private final Object element;
+
+        DoesNotContain(final Where<Q, V> where,
+                       final Object element) {
+
+            super(where);
+            this.element = element;
+        }
+
+        @Override
+        public Stream<Q> findAll() {
+            return this.where.select.stream(this.scope)
+                .filter(q -> !Contains.containsElement(this.where.function.apply(q), this.element));
+        }
+    }
+
+    /**
      * Obtains the resolved {@link Indexable} (non-{@link Unique}) {@link Function}s for the specified {@link Class}.
      *
      * @param indexableClass the {@link Class} of queryable
@@ -462,7 +653,9 @@ public abstract class AbstractHeapBasedIndex implements Index {
      */
     protected static Streamable<Function<Object, Object>> resolveIndexableFunctions(final Class<?> indexableClass) {
         return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
-            .filter(field -> isIndexableFunctionField(field) && field.getAnnotation(Unique.class) == null)
+            .filter(field -> isIndexableFunctionField(field)
+                && !field.getAnnotation(Indexable.class).each()
+                && field.getAnnotation(Unique.class) == null)
             .map(AbstractHeapBasedIndex::resolveFunction));
     }
 
@@ -488,6 +681,24 @@ public abstract class AbstractHeapBasedIndex implements Index {
     protected static Streamable<Function<Object, Object>> resolveDynamicNonUniqueFunctions(final Class<?> indexableClass) {
         return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
             .filter(field -> isIndexableFunctionField(field)
+                && !field.getAnnotation(Indexable.class).each()
+                && field.getAnnotation(Dynamic.class) != null
+                && field.getAnnotation(Unique.class) == null)
+            .map(AbstractHeapBasedIndex::resolveFunction));
+    }
+
+    protected static Streamable<Function<Object, Object>> resolveEachFunctions(final Class<?> indexableClass) {
+        return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
+            .filter(field -> isIndexableFunctionField(field)
+                && field.getAnnotation(Indexable.class).each()
+                && field.getAnnotation(Unique.class) == null)
+            .map(AbstractHeapBasedIndex::resolveFunction));
+    }
+
+    protected static Streamable<Function<Object, Object>> resolveDynamicEachFunctions(final Class<?> indexableClass) {
+        return Streamable.of(Introspection.getAllDeclaredFields(indexableClass)
+            .filter(field -> isIndexableFunctionField(field)
+                && field.getAnnotation(Indexable.class).each()
                 && field.getAnnotation(Dynamic.class) != null
                 && field.getAnnotation(Unique.class) == null)
             .map(AbstractHeapBasedIndex::resolveFunction));
@@ -684,6 +895,16 @@ public abstract class AbstractHeapBasedIndex implements Index {
         @Override
         public Terminal<Q, Matches<Q, V>> matches(final Predicate<? super V> predicate) {
             return new Matches<>(this, predicate);
+        }
+
+        @Override
+        public Terminal<Q, ?> contains(final Object element) {
+            return new Contains<Q, V>(this, element);
+        }
+
+        @Override
+        public Terminal<Q, ?> doesNotContain(final Object element) {
+            return new DoesNotContain<Q, V>(this, element);
         }
     }
 

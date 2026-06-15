@@ -3,10 +3,12 @@ package build.base.query;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Function;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -802,6 +804,253 @@ public interface IndexCompatibilityTests {
     }
 
     /**
+     * Demonstrates the difference between a plain {@link Indexable} function and one annotated with
+     * {@code @Indexable(each = true)}.
+     *
+     * <p>Both fields on {@link ScalarVsEach} return a {@link List}{@code <Color>}, but they are indexed differently:
+     * <ul>
+     *   <li>{@code COLORS_SCALAR} — the whole {@link List} is the key; {@code isEqualTo(list)} finds the object and
+     *       {@code contains(element)} returns nothing because no individual element is a key.</li>
+     *   <li>{@code COLORS_EACH} — each {@link Color} is an individual key; {@code contains(element)} finds the object
+     *       and {@code isEqualTo(list)} returns nothing because the whole list is not a key.</li>
+     * </ul>
+     */
+    @Test
+    default void shouldDistinguishScalarIndexingFromEachIndexing() {
+        final var index = createIndex();
+        final var object = new ScalarVsEach(Color.RED, Color.GREEN);
+        index.index(object);
+
+        // scalar: the whole list is the key
+        assertThat(index.match(ScalarVsEach.class)
+            .where(ScalarVsEach.COLORS_SCALAR)
+            .isEqualTo(List.of(Color.RED, Color.GREEN))
+            .findAll())
+            .containsExactly(object);
+
+        assertThat(index.match(ScalarVsEach.class)
+            .where(ScalarVsEach.COLORS_SCALAR)
+            .contains(Color.RED)
+            .findAll())
+            .isEmpty();
+
+        // each: individual elements are keys
+        assertThat(index.match(ScalarVsEach.class)
+            .where(ScalarVsEach.COLORS_EACH)
+            .contains(Color.RED)
+            .findAll())
+            .containsExactly(object);
+
+        assertThat(index.match(ScalarVsEach.class)
+            .where(ScalarVsEach.COLORS_EACH)
+            .isEqualTo(List.of(Color.RED, Color.GREEN))
+            .findAll())
+            .isEmpty();
+    }
+
+    /**
+     * Ensure objects with a multi-valued {@link Indexable} function can be queried with {@code contains}.
+     */
+    @Test
+    default void shouldIndexAndQueryClassWithMultiValuedIndexableField() {
+        final var index = createIndex();
+
+        final var redGreen = new MultiColored(Color.RED, Color.GREEN);
+        final var greenBlue = new MultiColored(Color.GREEN, Color.BLUE);
+        index.index(redGreen);
+        index.index(greenBlue);
+
+        assertThat(index.match(MultiColored.class)
+            .where(MultiColored.COLORS)
+            .contains(Color.RED)
+            .findAll())
+            .containsExactly(redGreen);
+
+        assertThat(index.match(MultiColored.class)
+            .where(MultiColored.COLORS)
+            .contains(Color.GREEN)
+            .findAll())
+            .containsExactlyInAnyOrder(redGreen, greenBlue);
+
+        assertThat(index.match(MultiColored.class)
+            .where(MultiColored.COLORS)
+            .contains(Color.BLUE)
+            .findAll())
+            .containsExactly(greenBlue);
+    }
+
+    /**
+     * Ensure objects with a multi-valued {@link Indexable} function can be unindexed cleanly.
+     */
+    @Test
+    default void shouldUnindexObjectWithMultiValuedIndexableField() {
+        final var index = createIndex();
+
+        final var redGreen = new MultiColored(Color.RED, Color.GREEN);
+        final var greenBlue = new MultiColored(Color.GREEN, Color.BLUE);
+        index.index(redGreen);
+        index.index(greenBlue);
+
+        index.unindex(redGreen);
+
+        assertThat(index.match(MultiColored.class)
+            .where(MultiColored.COLORS)
+            .contains(Color.RED)
+            .findAll())
+            .isEmpty();
+
+        assertThat(index.match(MultiColored.class)
+            .where(MultiColored.COLORS)
+            .contains(Color.GREEN)
+            .findAll())
+            .containsExactly(greenBlue);
+    }
+
+    /**
+     * Ensure a multi-valued {@link Indexable} function that returns a {@link java.util.Collection} is indexed and
+     * queried correctly (exercises the {@code Collection} branch of the indexing path).
+     */
+    @Test
+    default void shouldIndexAndQueryClassWithCollectionMultiValuedField() {
+        final var index = createIndex();
+
+        final var redGreen = new MultiColoredWithList(Color.RED, Color.GREEN);
+        final var greenBlue = new MultiColoredWithList(Color.GREEN, Color.BLUE);
+        index.index(redGreen);
+        index.index(greenBlue);
+
+        assertThat(index.match(MultiColoredWithList.class)
+            .where(MultiColoredWithList.COLORS)
+            .contains(Color.RED)
+            .findAll())
+            .containsExactly(redGreen);
+
+        assertThat(index.match(MultiColoredWithList.class)
+            .where(MultiColoredWithList.COLORS)
+            .contains(Color.GREEN)
+            .findAll())
+            .containsExactlyInAnyOrder(redGreen, greenBlue);
+    }
+
+    /**
+     * Ensure a multi-valued {@link Indexable} function that returns a plain {@link Iterable} (not a
+     * {@link java.util.Collection}) is indexed and queried correctly (exercises the {@code Iterable} branch).
+     */
+    @Test
+    default void shouldIndexAndQueryClassWithIterableMultiValuedField() {
+        final var index = createIndex();
+
+        final var redGreen = new MultiColoredWithIterable(Color.RED, Color.GREEN);
+        final var greenBlue = new MultiColoredWithIterable(Color.GREEN, Color.BLUE);
+        index.index(redGreen);
+        index.index(greenBlue);
+
+        assertThat(index.match(MultiColoredWithIterable.class)
+            .where(MultiColoredWithIterable.COLORS)
+            .contains(Color.RED)
+            .findAll())
+            .containsExactly(redGreen);
+
+        assertThat(index.match(MultiColoredWithIterable.class)
+            .where(MultiColoredWithIterable.COLORS)
+            .contains(Color.GREEN)
+            .findAll())
+            .containsExactlyInAnyOrder(redGreen, greenBlue);
+    }
+
+    /**
+     * Ensure reindexing a multi-valued object removes the old element keys and adds the new ones.
+     */
+    @Test
+    default void shouldReindexObjectWithMultiValuedIndexableField() {
+        final var index = createIndex();
+
+        final var object = new MutableMultiColored(Color.RED, Color.GREEN);
+        index.index(object);
+
+        object.setColors(Color.GREEN, Color.BLUE);
+        index.reindex(object);
+
+        assertThat(index.match(MutableMultiColored.class)
+            .where(MutableMultiColored.COLORS)
+            .contains(Color.RED)
+            .findAll())
+            .isEmpty();
+
+        assertThat(index.match(MutableMultiColored.class)
+            .where(MutableMultiColored.COLORS)
+            .contains(Color.GREEN)
+            .findAll())
+            .containsExactly(object);
+
+        assertThat(index.match(MutableMultiColored.class)
+            .where(MutableMultiColored.COLORS)
+            .contains(Color.BLUE)
+            .findAll())
+            .containsExactly(object);
+    }
+
+    /**
+     * Ensure {@code contains} falls back to a linear scan when the function is not {@link Indexable}.
+     */
+    @Test
+    default void shouldContainsFallBackToLinearScanForNonIndexedFunction() {
+        final var index = createIndex();
+
+        final var redGreen = new MultiColored(Color.RED, Color.GREEN);
+        final var greenBlue = new MultiColored(Color.GREEN, Color.BLUE);
+        index.index(redGreen);
+        index.index(greenBlue);
+
+        final Function<MultiColored, Stream<Color>> nonIndexed = c -> MultiColored.COLORS.apply(c);
+
+        assertThat(index.match(MultiColored.class)
+            .where(nonIndexed)
+            .contains(Color.RED)
+            .findAll())
+            .containsExactly(redGreen);
+
+        assertThat(index.match(MultiColored.class)
+            .where(nonIndexed)
+            .contains(Color.GREEN)
+            .findAll())
+            .containsExactlyInAnyOrder(redGreen, greenBlue);
+    }
+
+    /**
+     * Ensure {@code doesNotContain} returns objects whose multi-valued field does not include the specified element.
+     */
+    @Test
+    default void shouldQueryDoesNotContainWithMultiValuedField() {
+        final var index = createIndex();
+
+        final var redGreen = new MultiColored(Color.RED, Color.GREEN);
+        final var greenBlue = new MultiColored(Color.GREEN, Color.BLUE);
+        final var onlyBlue = new MultiColored(Color.BLUE);
+        index.index(redGreen);
+        index.index(greenBlue);
+        index.index(onlyBlue);
+
+        assertThat(index.match(MultiColored.class)
+            .where(MultiColored.COLORS)
+            .doesNotContain(Color.RED)
+            .findAll())
+            .containsExactlyInAnyOrder(greenBlue, onlyBlue);
+
+        assertThat(index.match(MultiColored.class)
+            .where(MultiColored.COLORS)
+            .doesNotContain(Color.GREEN)
+            .findAll())
+            .containsExactly(onlyBlue);
+
+        assertThat(index.match(MultiColored.class)
+            .where(MultiColored.COLORS)
+            .doesNotContain(Color.BLUE)
+            .findAll())
+            .containsExactly(redGreen);
+    }
+
+    /**
      * A simple {@link Enum} for testing.
      */
     @Indexable
@@ -1007,6 +1256,125 @@ public interface IndexCompatibilityTests {
 
         public void setId(final String id) {
             this.id = id;
+        }
+    }
+
+    /**
+     * A class with two {@link Indexable} functions over the same {@link List}{@code <Color>} field, one scalar and
+     * one each, used to demonstrate the difference between the two indexing modes.
+     */
+    class ScalarVsEach {
+
+        /** The whole {@link List} is the index key. */
+        @Indexable
+        public static final Function<ScalarVsEach, List<Color>> COLORS_SCALAR = o -> o.colors;
+
+        /** Each {@link Color} in the {@link List} is an individual index key. */
+        @Indexable(each = true)
+        public static final Function<ScalarVsEach, List<Color>> COLORS_EACH = o -> o.colors;
+
+        private final List<Color> colors;
+
+        ScalarVsEach(final Color... colors) {
+            this.colors = List.of(colors);
+        }
+    }
+
+    /**
+     * A class with a multi-valued {@link Indexable} function that returns a {@link Stream}.
+     */
+    class MultiColored {
+
+        @Indexable(each = true)
+        public static final Function<MultiColored, Stream<Color>> COLORS = c -> c.colors.stream();
+
+        private final List<Color> colors;
+
+        MultiColored(final Color... colors) {
+            this.colors = List.of(colors);
+        }
+
+        @Override
+        public boolean equals(final Object other) {
+            return other instanceof MultiColored mc && this.colors.equals(mc.colors);
+        }
+
+        @Override
+        public int hashCode() {
+            return this.colors.hashCode();
+        }
+    }
+
+    /**
+     * A class with a multi-valued {@link Indexable} function that returns a {@link List} (exercises the
+     * {@link java.util.Collection} indexing branch).
+     */
+    class MultiColoredWithList {
+
+        @Indexable(each = true)
+        public static final Function<MultiColoredWithList, List<Color>> COLORS = c -> c.colors;
+
+        private final List<Color> colors;
+
+        MultiColoredWithList(final Color... colors) {
+            this.colors = List.of(colors);
+        }
+
+        @Override
+        public boolean equals(final Object other) {
+            return other instanceof MultiColoredWithList mc && this.colors.equals(mc.colors);
+        }
+
+        @Override
+        public int hashCode() {
+            return this.colors.hashCode();
+        }
+    }
+
+    /**
+     * A class with a multi-valued {@link Indexable} function that returns a plain {@link Iterable} that is not a
+     * {@link java.util.Collection} (exercises the {@code Iterable} indexing branch).
+     */
+    class MultiColoredWithIterable {
+
+        @Indexable(each = true)
+        public static final Function<MultiColoredWithIterable, Iterable<Color>> COLORS =
+            c -> () -> c.colors.iterator();
+
+        private final List<Color> colors;
+
+        MultiColoredWithIterable(final Color... colors) {
+            this.colors = List.of(colors);
+        }
+
+        @Override
+        public boolean equals(final Object other) {
+            return other instanceof MultiColoredWithIterable mc && this.colors.equals(mc.colors);
+        }
+
+        @Override
+        public int hashCode() {
+            return this.colors.hashCode();
+        }
+    }
+
+    /**
+     * A mutable class with a multi-valued {@link Indexable} function, used to verify that reindexing after mutation
+     * removes the old element keys and adds the new ones.
+     */
+    class MutableMultiColored {
+
+        @Indexable(each = true)
+        public static final Function<MutableMultiColored, Stream<Color>> COLORS = c -> c.colors.stream();
+
+        private List<Color> colors;
+
+        MutableMultiColored(final Color... colors) {
+            this.colors = List.of(colors);
+        }
+
+        void setColors(final Color... colors) {
+            this.colors = List.of(colors);
         }
     }
 }
