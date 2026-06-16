@@ -20,8 +20,10 @@ package build.base.query;
  * #L%
  */
 
+import java.util.Collection;
 import java.util.Objects;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 /**
  * Provides a mechanism to specify a condition for filtering {@link Object}s of a specific {@link Class} being queried
@@ -67,4 +69,28 @@ public interface Condition<Q, V> {
     default Terminal<Q, ?> doesNotMatch(final Predicate<? super V> predicate) {
         return matches(predicate.negate());
     }
+
+    /**
+     * Specifies an element that must be contained within the extracted value, which is expected to be a
+     * {@link Collection}, {@link Stream}, or {@link Iterable}.
+     * <p>
+     * When the underlying {@link Indexable} {@link java.util.function.Function} has been indexed, this performs an O(1)
+     * lookup; otherwise it falls back to a linear scan.
+     *
+     * @param element the element that must be present
+     * @return a {@link Terminal} that can be used to obtain the results
+     */
+    Terminal<Q, ?> contains(Object element);
+
+    /**
+     * Specifies an element that must not be contained within the extracted value, which is expected to be a
+     * {@link java.util.Collection}, {@link java.util.stream.Stream}, or {@link Iterable}.
+     * <p>
+     * This always performs a linear scan because the reverse index only supports positive membership lookups; negation
+     * cannot be answered from the index alone without enumerating all objects.
+     *
+     * @param element the element that must be absent
+     * @return a {@link Terminal} that can be used to obtain the results
+     */
+    Terminal<Q, ?> doesNotContain(Object element);
 }

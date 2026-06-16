@@ -38,4 +38,14 @@ import java.util.function.Function;
 @Target({ElementType.FIELD, ElementType.TYPE})
 public @interface Indexable {
 
+    /**
+     * When {@code true}, the function is expected to return a {@link java.util.stream.Stream},
+     * {@link java.util.Collection}, or {@link Iterable}, and each element of that container is indexed
+     * individually as a separate key.  This enables O(1) {@link Condition#contains} lookups.
+     * <p>
+     * When {@code false} (the default), the return value of the function is treated as a single scalar key.
+     *
+     * @return {@code true} if each element should be indexed separately
+     */
+    boolean each() default false;
 }
