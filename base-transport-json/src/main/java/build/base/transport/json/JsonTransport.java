@@ -57,7 +57,6 @@ import build.base.transport.json.codec.OptionalCodec;
 import build.base.transport.json.codec.PeriodCodec;
 import build.base.transport.json.codec.StreamableCodec;
 import build.base.transport.json.codec.StringCodec;
-import build.base.transport.json.codec.TimestampCodec;
 import build.base.transport.json.codec.ZonedDateTimeCodec;
 
 import java.io.IOException;
@@ -121,7 +120,6 @@ public class JsonTransport
         register(new DurationCodec());
         register(new PeriodCodec());
         register(new DateCodec());
-        register(new TimestampCodec());
     }
 
     /**

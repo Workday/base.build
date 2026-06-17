@@ -24,8 +24,6 @@
  * @since Feb-2024
  */
 module build.base.foundation {
-    requires java.sql;
-
     exports build.base.foundation;
     exports build.base.foundation.iterator;
     exports build.base.foundation.iterator.matching;

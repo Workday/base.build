@@ -24,8 +24,6 @@
  * @since May-2025
  */
 module build.base.telemetry.ansi {
-    requires java.compiler;
-
     requires build.base.foundation;
     requires transitive build.base.telemetry;
     requires transitive build.base.telemetry.foundation;

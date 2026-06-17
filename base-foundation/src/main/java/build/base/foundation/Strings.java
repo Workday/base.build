@@ -132,7 +132,6 @@ public class Strings {
         registerParser(map, AtomicLong.class, s -> new AtomicLong(convert(s, long.class)));
         registerParser(map, AtomicBoolean.class, s -> new AtomicBoolean(convert(s, boolean.class)));
         registerParser(map, Date.class, s -> new Date(Instant.parse(s).toEpochMilli()));
-        registerParser(map, java.sql.Date.class, s -> new java.sql.Date(Instant.parse(s).toEpochMilli()));
         registerParser(map, Duration.class, s -> s.contains("P") ? Duration.parse(s) : parsePrettyDuration(s));
         registerParser(map, Instant.class, Instant::parse);
         registerParser(map, LocalDate.class, LocalDate::parse);
