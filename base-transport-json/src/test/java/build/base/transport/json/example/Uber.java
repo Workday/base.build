@@ -28,7 +28,6 @@ import build.base.marshalling.Unmarshal;
 import java.lang.invoke.MethodHandles;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -110,8 +109,8 @@ public class Uber {
     private final Date aDate;
     private final Date aNullDate;
 
-    private final Timestamp aTimestamp;
-    private final Timestamp aNullTimestamp;
+    private final Instant anotherInstant;
+    private final Instant aNullAnotherInstant;
 
     public Uber() {
         this.anInteger = 1;
@@ -175,8 +174,8 @@ public class Uber {
         this.aDate = new Date(2024, Calendar.NOVEMBER, 1);
         this.aNullDate = null;
 
-        this.aTimestamp = new Timestamp(2024, Calendar.NOVEMBER, 1, 14, 31, 7, 0);
-        this.aNullTimestamp = null;
+        this.anotherInstant = Instant.ofEpochSecond(2000);
+        this.aNullAnotherInstant = null;
     }
 
     @Unmarshal
@@ -223,8 +222,8 @@ public class Uber {
                 final Period aNullPeriod,
                 final Date aDate,
                 final Date aNullDate,
-                final Timestamp aTimestamp,
-                final Timestamp aNullTimestamp) {
+                final Instant anotherInstant,
+                final Instant aNullAnotherInstant) {
 
         this.anInteger = anInteger;
         this.anIntegerWrapper = anIntegerWrapper;
@@ -287,8 +286,8 @@ public class Uber {
         this.aDate = aDate;
         this.aNullDate = aNullDate;
 
-        this.aTimestamp = aTimestamp;
-        this.aNullTimestamp = aNullTimestamp;
+        this.anotherInstant = anotherInstant;
+        this.aNullAnotherInstant = aNullAnotherInstant;
     }
 
     @Marshal
@@ -335,8 +334,8 @@ public class Uber {
                            final Out<Period> aNullPeriod,
                            final Out<Date> aDate,
                            final Out<Date> aNullDate,
-                           final Out<Timestamp> aTimestamp,
-                           final Out<Timestamp> aNullTimestamp) {
+                           final Out<Instant> anotherInstant,
+                           final Out<Instant> aNullAnotherInstant) {
 
         anInteger.set(this.anInteger);
         anIntegerWrapper.set(this.anIntegerWrapper);
@@ -399,8 +398,8 @@ public class Uber {
         aDate.set(this.aDate);
         aNullDate.set(this.aNullDate);
 
-        aTimestamp.set(this.aTimestamp);
-        aNullTimestamp.set(this.aNullTimestamp);
+        anotherInstant.set(this.anotherInstant);
+        aNullAnotherInstant.set(this.aNullAnotherInstant);
     }
 
     @Override
@@ -434,8 +433,8 @@ public class Uber {
             && Objects.equals(aNullZonedDateTime, uber.aNullZonedDateTime) && aDuration.equals(uber.aDuration)
             && Objects.equals(aNullDuration, uber.aNullDuration) && aPeriod.equals(uber.aPeriod) &&
             Objects.equals(aNullPeriod, uber.aNullPeriod) && aDate.equals(uber.aDate) && Objects.equals(aNullDate,
-            uber.aNullDate) && aTimestamp.equals(uber.aTimestamp) && Objects.equals(aNullTimestamp,
-            uber.aNullTimestamp);
+            uber.aNullDate) && anotherInstant.equals(uber.anotherInstant) && Objects.equals(aNullAnotherInstant,
+            uber.aNullAnotherInstant);
     }
 
     @Override
@@ -447,7 +446,7 @@ public class Uber {
             aDoubleWrapper, aNullDoubleWrapper, aBigDecimal, aNullBigDecimal, aBigInteger, aNullBigInteger, anInstant,
             aNullInstant, aLocalDate, aNullLocalDate, aLocalTime, aNullLocalTime, aLocalDateTime, aNullLocalDateTime,
             aZonedDateTime, aNullZonedDateTime, aDuration, aNullDuration, aPeriod, aNullPeriod, aDate, aNullDate,
-            aTimestamp, aNullTimestamp);
+            anotherInstant, aNullAnotherInstant);
     }
 
     static {

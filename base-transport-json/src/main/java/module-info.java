@@ -29,7 +29,5 @@ open module build.base.transport.json {
     requires build.base.marshalling;
     requires build.base.transport;
 
-    requires java.sql;
-
     exports build.base.transport.json;
 }
