@@ -114,6 +114,7 @@
         <module>base-telemetry</module>
         <module>base-telemetry-ansi</module>
         <module>base-telemetry-foundation</module>
+        <module>base-telemetry-javac</module>
         <module>base-template</module>
         <module>base-template-processor</module>
         <module>base-template-test</module>
@@ -248,6 +249,11 @@
             <dependency>
                 <groupId>build.base</groupId>
                 <artifactId>base-telemetry-foundation</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>build.base</groupId>
+                <artifactId>base-telemetry-javac</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
