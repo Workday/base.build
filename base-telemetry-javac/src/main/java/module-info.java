@@ -1,15 +1,15 @@
 /*-
  * #%L
- * base.build Telemetry Foundation
+ * base.build Telemetry (javac)
  * %%
- * Copyright (C) 2025 Workday Inc
+ * Copyright (C) 2026 Workday Inc
  * %%
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,14 +18,17 @@
  * #L%
  */
 /**
- * Defines the <i>Base Telemetry</i> foundation classes.
+ * Defines the <i>javac Messager-based Telemetry Recorder</i> for use in annotation processors.
  *
- * @author brian.oliver
- * @since May-2024
+ * @author reed.vonredwitz
+ * @since Jun-2026
  */
-module build.base.telemetry.foundation {
+module build.base.telemetry.javac {
+    requires java.compiler;
+
     requires build.base.foundation;
     requires build.base.telemetry;
+    requires build.base.telemetry.foundation;
 
-    exports build.base.telemetry.foundation;
+    exports build.base.telemetry.javac;
 }

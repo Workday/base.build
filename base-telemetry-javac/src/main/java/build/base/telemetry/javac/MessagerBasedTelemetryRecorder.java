@@ -1,8 +1,8 @@
-package build.base.telemetry.foundation;
+package build.base.telemetry.javac;
 
 /*-
  * #%L
- * base.build Telemetry Foundation
+ * base.build Telemetry (javac)
  * %%
  * Copyright (C) 2025 Workday Inc
  * %%
@@ -33,6 +33,7 @@ import build.base.telemetry.Telemetry;
 import build.base.telemetry.TelemetryRecorder;
 import build.base.telemetry.TelemetryRecorderFactory;
 import build.base.telemetry.Warning;
+import build.base.telemetry.foundation.AbstractTelemetryRecorder;
 
 import java.net.URI;
 import java.util.Objects;
