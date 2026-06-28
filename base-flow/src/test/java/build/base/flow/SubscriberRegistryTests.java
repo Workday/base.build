@@ -275,6 +275,31 @@ class SubscriberRegistryTests {
     }
 
     /**
+     * Ensure the subscriber error observer is notified when a {@link Subscriber} throws from
+     * {@link Subscriber#onNext(Object)}, and that the subscriber is subsequently terminated.
+     */
+    @Test
+    void shouldNotifyObserverWhenSubscriberThrows() {
+        final SubscriberRegistry<String> registry = new SubscriberRegistry<>();
+
+        final List<Throwable> observed = new ArrayList<>();
+        registry.onSubscriberError((_, throwable) -> observed.add(throwable));
+
+        final RuntimeException thrown = new RuntimeException("disk full");
+        final TrackingSubscriber<String> subscriber = new TrackingSubscriber<>() {
+            @Override
+            public void onNext(final String item) {
+                throw thrown;
+            }
+        };
+        registry.subscribe(subscriber);
+        registry.publish("hello");
+
+        assertThat(observed).containsExactly(thrown);
+        assertThat(subscriber.throwable()).contains(thrown);
+    }
+
+    /**
      * Ensure {@link SubscriberRegistry} will complete only once, and subsequent completion and error attempts will
      * have no effect (return false).
      */
