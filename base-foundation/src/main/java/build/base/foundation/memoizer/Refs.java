@@ -1,15 +1,17 @@
+package build.base.foundation.memoizer;
+
 /*-
  * #%L
  * base.build Foundation
  * %%
- * Copyright (C) 2025 Workday Inc
+ * Copyright (C) 2026 Workday, Inc.
  * %%
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,19 +19,8 @@
  * limitations under the License.
  * #L%
  */
+
 /**
- * Provides foundational types.
- *
- * @author brian.oliver
- * @since Feb-2024
+ * Reference mode used by {@link Memoizer.Builder} and {@link Memoizer.ConcurrentBuilder}.
  */
-module build.base.foundation {
-    exports build.base.foundation;
-    exports build.base.foundation.iterator;
-    exports build.base.foundation.memoizer;
-    exports build.base.foundation.iterator.matching;
-    exports build.base.foundation.predicate;
-    exports build.base.foundation.stream;
-    exports build.base.foundation.tuple;
-    exports build.base.foundation.unit;
-}
+enum Refs {STRONG, SOFT, WEAK}

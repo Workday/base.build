@@ -21,7 +21,7 @@ package build.base.query;
  */
 
 import build.base.foundation.Introspection;
-import build.base.foundation.Memoizer;
+import build.base.foundation.memoizer.Memoizer;
 import build.base.foundation.stream.Streamable;
 import build.base.foundation.tuple.Pair;
 
@@ -130,12 +130,12 @@ public abstract class AbstractHeapBasedIndex implements Index {
         this.objectByClass = new ConcurrentHashMap<>();
         this.objectsByClassIndexableFunctionAndValue = new ConcurrentHashMap<>();
         this.uniqueObjectsByClassFunctionAndKey = new ConcurrentHashMap<>();
-        this.indexableFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveIndexableFunctions);
-        this.uniqueIndexableFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveUniqueIndexableFunctions);
-        this.dynamicNonUniqueFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveDynamicNonUniqueFunctions);
-        this.dynamicUniqueFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveDynamicUniqueFunctions);
-        this.eachFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveEachFunctions);
-        this.dynamicEachFunctionsByClass = new Memoizer<>(AbstractHeapBasedIndex::resolveDynamicEachFunctions);
+        this.indexableFunctionsByClass = Memoizer.of(AbstractHeapBasedIndex::resolveIndexableFunctions).concurrent().build();
+        this.uniqueIndexableFunctionsByClass = Memoizer.of(AbstractHeapBasedIndex::resolveUniqueIndexableFunctions).concurrent().build();
+        this.dynamicNonUniqueFunctionsByClass = Memoizer.of(AbstractHeapBasedIndex::resolveDynamicNonUniqueFunctions).concurrent().build();
+        this.dynamicUniqueFunctionsByClass = Memoizer.of(AbstractHeapBasedIndex::resolveDynamicUniqueFunctions).concurrent().build();
+        this.eachFunctionsByClass = Memoizer.of(AbstractHeapBasedIndex::resolveEachFunctions).concurrent().build();
+        this.dynamicEachFunctionsByClass = Memoizer.of(AbstractHeapBasedIndex::resolveDynamicEachFunctions).concurrent().build();
     }
 
     @Override

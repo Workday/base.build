@@ -20,6 +20,7 @@ package build.base.foundation;
  * #L%
  */
 
+import build.base.foundation.memoizer.Memoizer;
 import build.base.foundation.stream.Streamable;
 
 import java.lang.annotation.Annotation;
@@ -143,13 +144,17 @@ public final class Introspection {
         defaultValues.put(String.class, "");
         DEFAULT_VALUES = java.util.Collections.unmodifiableMap(defaultValues);
 
-        ALL_DECLARED_FIELDS_BY_CLASS = new Memoizer<>(clazz -> extractAll(clazz, Class::getDeclaredFields));
+        ALL_DECLARED_FIELDS_BY_CLASS = Memoizer.<Class<?>, Streamable<Field>>of(
+            clazz -> extractAll(clazz, Class::getDeclaredFields)).concurrent().build();
 
-        ALL_DECLARED_METHODS_BY_CLASS = new Memoizer<>(clazz -> extractAll(clazz, Class::getDeclaredMethods));
+        ALL_DECLARED_METHODS_BY_CLASS = Memoizer.<Class<?>, Streamable<Method>>of(
+            clazz -> extractAll(clazz, Class::getDeclaredMethods)).concurrent().build();
 
-        ALL_DECLARED_ANNOTATIONS_BY_CLASS = new Memoizer<>(clazz ->
-            new Memoizer<>(annotationClass ->
-                extractAll(clazz, c -> c.getDeclaredAnnotationsByType(annotationClass))));
+        ALL_DECLARED_ANNOTATIONS_BY_CLASS = Memoizer.<Class<?>, Memoizer<Class<? extends Annotation>, Streamable<? extends Annotation>>>of(
+            clazz -> Memoizer.<Class<? extends Annotation>, Streamable<? extends Annotation>>of(
+                annotationClass -> extractAll(clazz, c -> c.getDeclaredAnnotationsByType(annotationClass))
+            ).concurrent().build()
+        ).concurrent().build();
     }
 
     /**
