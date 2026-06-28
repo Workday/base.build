@@ -27,6 +27,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 
 /**
  * A {@link Publicist} for registered {@link Subscriber}s to which items may be published.
@@ -49,11 +50,28 @@ public class SubscriberRegistry<T>
     private final CompletableFuture<?> onCompleted;
 
     /**
+     * Called when a {@link Subscriber} throws from {@link Subscriber#onNext(Object)}, before the subscriber
+     * is terminated.  Defaults to a no-op.
+     */
+    private BiConsumer<Subscriber<?>, Throwable> subscriberErrorObserver = (_, _) -> {};
+
+    /**
      * Constructs a {@link SubscriberRegistry}.
      */
     public SubscriberRegistry() {
         this.subscriptions = new ConcurrentHashMap<>();
         this.onCompleted = new CompletableFuture<>();
+    }
+
+    /**
+     * Sets the observer to be notified when a {@link Subscriber} throws from {@link Subscriber#onNext(Object)}.
+     *
+     * @param observer a {@link BiConsumer} receiving the failing subscriber and the throwable it raised
+     * @return this registry, for fluent configuration
+     */
+    public SubscriberRegistry<T> onSubscriberError(final BiConsumer<Subscriber<?>, Throwable> observer) {
+        this.subscriberErrorObserver = Objects.requireNonNull(observer, "The observer can't be null");
+        return this;
     }
 
     @Override
@@ -289,6 +307,7 @@ public class SubscriberRegistry<T>
                                 }
                             }
                             catch (final Throwable throwable) {
+                                SubscriberRegistry.this.subscriberErrorObserver.accept(this.subscriber, throwable);
                                 error(throwable);
                             }
                         }
