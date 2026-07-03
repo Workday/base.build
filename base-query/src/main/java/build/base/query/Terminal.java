@@ -128,4 +128,13 @@ public interface Terminal<Q, T extends Terminal<Q, T>> {
             throw new NoSuchElementException("No single matching value available satisfying the query");
         }
     }
+
+    /**
+     * Obtains the number of {@link Object}s that match the query.
+     *
+     * @return the number of matching {@link Object}s
+     */
+    default long count() {
+        return findAll().count();
+    }
 }

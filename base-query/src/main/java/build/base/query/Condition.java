@@ -53,6 +53,55 @@ public interface Condition<Q, V> {
     Terminal<Q, ?> isNotEqualTo(V value);
 
     /**
+     * Specifies that the extracted value must be {@code null}.
+     * <p>
+     * The index normalizes {@code null} to an internal sentinel, so this is a thin wrapper around
+     * {@link #isEqualTo(Object)} and benefits from the same indexed lookup.
+     *
+     * @return a {@link Terminal} that can be used to obtain the results
+     */
+    default Terminal<Q, ?> isNull() {
+        return isEqualTo(null);
+    }
+
+    /**
+     * Specifies that the extracted value must not be {@code null}.
+     * <p>
+     * A thin wrapper around {@link #isNotEqualTo(Object)}.
+     *
+     * @return a {@link Terminal} that can be used to obtain the results
+     */
+    default Terminal<Q, ?> isNotNull() {
+        return isNotEqualTo(null);
+    }
+
+    /**
+     * Specifies a {@link Collection} of values, one of which must successfully compare with the extracted value
+     * using {@link Objects#equals(Object, Object)}.
+     * <p>
+     * When the underlying {@link Indexable} {@link java.util.function.Function} has been indexed, this performs one
+     * reverse-map lookup per value and unions the results; otherwise it falls back to a linear scan.
+     *
+     * @param values the values, one of which must successfully compare
+     * @return a {@link Terminal} that can be used to obtain the results
+     */
+    Terminal<Q, ?> isIn(Collection<? extends V> values);
+
+    /**
+     * Specifies a {@link Collection} of values, none of which may successfully compare with the extracted value
+     * using {@link Objects#equals(Object, Object)}.
+     * <p>
+     * This always performs a linear scan because the reverse index only supports positive membership lookups;
+     * negation cannot be answered from the index alone without enumerating all objects.
+     *
+     * @param values the values, none of which may successfully compare
+     * @return a {@link Terminal} that can be used to obtain the results
+     */
+    default Terminal<Q, ?> isNotIn(final Collection<? extends V> values) {
+        return doesNotMatch(values::contains);
+    }
+
+    /**
      * Specifies a {@link Predicate} that must successfully match the extracted value.
      *
      * @param predicate the {@link Predicate} that must match

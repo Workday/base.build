@@ -31,6 +31,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -40,6 +41,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -906,6 +908,11 @@ public abstract class AbstractHeapBasedIndex implements Index {
         public Terminal<Q, ?> doesNotContain(final Object element) {
             return new DoesNotContain<Q, V>(this, element);
         }
+
+        @Override
+        public IsIn<Q, V> isIn(final Collection<? extends V> values) {
+            return new IsIn<>(this, values);
+        }
     }
 
 
@@ -1021,6 +1028,55 @@ public abstract class AbstractHeapBasedIndex implements Index {
 
             return this.where.select.stream(this.scope)
                 .filter(queryable -> !Objects.equals(this.where.nonNull(this.where.function.apply(queryable)), this.value));
+        }
+    }
+
+
+    /**
+     * A {@link Terminal} implementation for checking if a value is one of a specified set of values.
+     * <p>
+     * When the underlying {@link Indexable} function has been indexed, performs one reverse-map lookup per value and
+     * unions the results. Falls back to a linear scan testing membership for unindexed objects.
+     *
+     * @param <Q> the type of {@link Object}
+     * @param <V> the type of value
+     */
+    private class IsIn<Q, V>
+        extends AbstractTerminal<Q, V, IsIn<Q, V>> {
+
+        /**
+         * The non-{@code null} values to compare against.
+         */
+        private final Set<Object> values;
+
+        IsIn(final Where<Q, V> where, final Collection<? extends V> values) {
+            super(where);
+            this.values = values.stream()
+                .map(where::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        }
+
+        @Override
+        public Stream<Q> findAll() {
+            final var uniquePairs = this.where.matchingUniquePairs();
+            if (!uniquePairs.isEmpty()) {
+                return uniquePairs.stream()
+                    .flatMap(pair -> this.values.stream().map(pair.second()::get))
+                    .filter(Objects::nonNull)
+                    .map(this.where.select.objectClass::cast);
+            }
+
+            final var indexPairs = this.where.matchingIndexPairs();
+            if (!indexPairs.isEmpty()) {
+                return indexPairs.stream()
+                    .flatMap(pair -> this.values.stream().map(pair.second()::get))
+                    .filter(objects -> objects != null && !objects.isEmpty())
+                    .flatMap(Set::stream)
+                    .map(this.where.select.objectClass::cast);
+            }
+
+            return this.where.select.stream(this.scope)
+                .filter(queryable -> this.values.contains(this.where.nonNull(this.where.function.apply(queryable))));
         }
     }
 

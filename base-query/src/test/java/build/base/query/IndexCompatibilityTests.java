@@ -3,6 +3,7 @@ package build.base.query;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -577,6 +578,122 @@ public interface IndexCompatibilityTests {
             .isNotEqualTo(null)
             .findFirst()
         ).isEmpty();
+    }
+
+    /**
+     * Ensure {@link Condition#isNull()} finds objects whose extracted value is {@code null}, delegating to
+     * {@link Condition#isEqualTo(Object) isEqualTo(null)}.
+     */
+    @Test
+    default void shouldFindObjectsWithNullValue() {
+        final var index = createIndex();
+        final var withNull = new NullColorful();
+        index.index(withNull);
+
+        assertThat(index.match(NullColorful.class)
+            .where(NullColorful.COLOR)
+            .isNull()
+            .findFirst()
+        ).contains(withNull);
+    }
+
+    /**
+     * Ensure {@link Condition#isNotNull()} excludes objects whose extracted value is {@code null}, delegating to
+     * {@link Condition#isNotEqualTo(Object) isNotEqualTo(null)}.
+     */
+    @Test
+    default void shouldExcludeObjectsWithNullValueWhenIsNotNull() {
+        final var index = createIndex();
+        final var withNull = new NullColorful();
+        index.index(withNull);
+
+        assertThat(index.match(NullColorful.class)
+            .where(NullColorful.COLOR)
+            .isNotNull()
+            .findFirst()
+        ).isEmpty();
+    }
+
+    /**
+     * Ensure {@link Terminal#count()} returns the number of matching objects without requiring callers to write
+     * {@code findAll().count()}.
+     */
+    @Test
+    default void shouldCountMatchingObjects() {
+        final var index = createIndex();
+        index.index(Color.RED);
+        index.index(Color.GREEN);
+        index.index(Color.BLUE);
+
+        assertThat(index.match(Color.class).findAll().count()).isEqualTo(3);
+        assertThat(index.match(Color.class).count()).isEqualTo(3);
+
+        assertThat(index.match(Color.class)
+            .where(Color.NAME)
+            .isNotEqualTo("RED")
+            .count()
+        ).isEqualTo(2);
+    }
+
+    /**
+     * Ensure {@link Condition#isIn(java.util.Collection)} returns objects whose indexed value matches any of the
+     * specified values, using the indexed path.
+     */
+    @Test
+    default void shouldReturnObjectsInValueSet() {
+        final var index = createIndex();
+        index.index(Color.RED);
+        index.index(Color.GREEN);
+        index.index(Color.BLUE);
+
+        assertThat(index.match(Color.class)
+            .where(Color.NAME)
+            .isIn(List.of("RED", "BLUE"))
+            .findAll()
+            .toList()
+        ).containsExactlyInAnyOrder(Color.RED, Color.BLUE);
+
+        assertThat(index.match(Color.class)
+            .where(Color.NAME)
+            .isIn(List.of())
+            .findAll()
+        ).isEmpty();
+    }
+
+    /**
+     * Ensure {@link Condition#isIn(java.util.Collection)} falls back to a linear scan on the non-{@link Indexable}
+     * path, and correctly matches a {@code null} member of the value set.
+     */
+    @Test
+    default void shouldReturnObjectsInValueSetOnFallbackPath() {
+        final var index = createIndex();
+        final var withNull = new NullFallbackColorful();
+        index.add(NullFallbackColorful.class, withNull);
+
+        assertThat(index.match(NullFallbackColorful.class)
+            .where(NullFallbackColorful.COLOR)
+            .isIn(Arrays.asList(Color.RED, null))
+            .findFirst()
+        ).contains(withNull);
+    }
+
+    /**
+     * Ensure {@link Condition#isNotIn(java.util.Collection)} excludes objects whose indexed value matches any of the
+     * specified values.
+     */
+    @Test
+    default void shouldReturnObjectsNotInValueSet() {
+        final var index = createIndex();
+        index.index(Color.RED);
+        index.index(Color.GREEN);
+        index.index(Color.BLUE);
+
+        assertThat(index.match(Color.class)
+            .where(Color.NAME)
+            .isNotIn(List.of("RED", "BLUE"))
+            .findAll()
+            .toList()
+        ).containsExactly(Color.GREEN);
     }
 
     /**
