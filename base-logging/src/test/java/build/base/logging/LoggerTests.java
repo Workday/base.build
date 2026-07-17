@@ -1,6 +1,5 @@
 package build.base.logging;
 
-import build.base.flow.LogRecordPublisher;
 import build.base.flow.RecordingSubscriber;
 import org.junit.jupiter.api.Test;
 

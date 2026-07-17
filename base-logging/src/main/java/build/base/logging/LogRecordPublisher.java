@@ -1,8 +1,8 @@
-package build.base.flow;
+package build.base.logging;
 
 /*-
  * #%L
- * base.build Flow
+ * base.build Logging
  * %%
  * Copyright (C) 2025 Workday Inc
  * %%
@@ -19,6 +19,10 @@ package build.base.flow;
  * limitations under the License.
  * #L%
  */
+
+import build.base.flow.Publisher;
+import build.base.flow.Subscriber;
+import build.base.flow.SubscriberRegistry;
 
 import java.util.logging.Handler;
 import java.util.logging.LogRecord;
