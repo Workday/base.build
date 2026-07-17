@@ -24,7 +24,6 @@
  * @since Oct-2024
  */
 module build.base.flow {
-    requires java.logging;
     requires build.base.foundation;
 
     exports build.base.flow;

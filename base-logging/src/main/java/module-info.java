@@ -25,6 +25,7 @@
  */
 module build.base.logging {
     requires java.logging;
+    requires build.base.flow;
     requires build.base.foundation;
 
     exports build.base.logging;
