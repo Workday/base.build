@@ -26,4 +26,5 @@ package build.base.tar;
  * @author reed.vonredwitz
  * @since Apr-2026
  */
-public record TarEntry(TarHeader header) {}
+public record TarEntry(TarHeader header) {
+}
