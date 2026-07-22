@@ -81,6 +81,12 @@ public abstract class AbstractConcurrentMemoizer<T, R> extends BaseMemoizer<T, R
 
     @Override
     public final R compute(final T input) {
+        return computeWith(input, () -> this.function.apply(input));
+    }
+
+    @Override
+    public final R computeWith(final T input, final Supplier<R> supplier) {
+        Objects.requireNonNull(supplier, "supplier must not be null");
         final var key = input == null ? NULL_KEY : input;
 
         // fast path — no lock needed on a cache hit
@@ -96,7 +102,7 @@ public abstract class AbstractConcurrentMemoizer<T, R> extends BaseMemoizer<T, R
             if (cached != null) {
                 return unwrap(cached);
             }
-            final R result = this.function.apply(input);
+            final R result = supplier.get();
             writeCache(key, wrap(result));
             return result;
         } finally {
