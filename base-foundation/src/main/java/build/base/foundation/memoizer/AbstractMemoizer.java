@@ -21,6 +21,7 @@ package build.base.foundation.memoizer;
  */
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -46,12 +47,18 @@ public abstract class AbstractMemoizer<T, R> extends BaseMemoizer<T, R> {
 
     @Override
     public final R compute(final T input) {
+        return computeWith(input, () -> this.function.apply(input));
+    }
+
+    @Override
+    public final R computeWith(final T input, final Supplier<R> supplier) {
+        Objects.requireNonNull(supplier, "supplier must not be null");
         final var key = input == null ? NULL_KEY : input;
         final var cached = readCache(key);
         if (cached != null) {
             return unwrap(cached);
         }
-        final R result = this.function.apply(input);
+        final R result = supplier.get();
         writeCache(key, wrap(result));
         return result;
     }

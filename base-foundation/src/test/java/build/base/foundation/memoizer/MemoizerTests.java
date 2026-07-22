@@ -133,6 +133,67 @@ class MemoizerTests {
     }
 
     // -------------------------------------------------------------------------
+    // computeWith
+    // -------------------------------------------------------------------------
+
+    @ParameterizedTest
+    @MethodSource("allFactories")
+    void shouldComputeWithSupplierOnFirstCall(final Function<Function<String, Integer>, Memoizer<String, Integer>> factory) {
+        final var memoizer = factory.apply(s -> { throw new AssertionError("function should not be invoked"); });
+        assertThat(memoizer.computeWith("hello", () -> 5)).isEqualTo(5);
+    }
+
+    @ParameterizedTest
+    @MethodSource("allFactories")
+    void shouldIgnoreSupplierOnCacheHit(final Function<Function<String, Integer>, Memoizer<String, Integer>> factory) {
+        final var memoizer = factory.apply(String::length);
+        memoizer.compute("hello");
+
+        assertThat(memoizer.computeWith("hello", () -> { throw new AssertionError("supplier should not be invoked"); }))
+            .isEqualTo(5);
+    }
+
+    @ParameterizedTest
+    @MethodSource("allFactories")
+    void shouldShareCacheBetweenComputeAndComputeWith(final Function<Function<String, Integer>, Memoizer<String, Integer>> factory) {
+        final var memoizer = factory.apply(String::length);
+        memoizer.computeWith("hello", () -> 5);
+
+        assertThat(memoizer.contains("hello")).isTrue();
+        assertThat(memoizer.compute("hello")).isEqualTo(5);
+    }
+
+    @ParameterizedTest
+    @MethodSource("allFactories")
+    void shouldRejectNullSupplier(final Function<Function<String, Integer>, Memoizer<String, Integer>> factory) {
+        final var memoizer = factory.apply(String::length);
+        assertThatThrownBy(() -> memoizer.computeWith("hello", null))
+            .isInstanceOf(NullPointerException.class);
+    }
+
+    @ParameterizedTest
+    @MethodSource("concurrentFactories")
+    void shouldComputeWithAtMostOnceUnderConcurrentLoad(
+        final Function<Function<String, Integer>, Memoizer<String, Integer>> factory) throws InterruptedException {
+        final var count = new AtomicInteger();
+        final var memoizer = factory.apply(s -> { throw new AssertionError("function should not be invoked"); });
+
+        final var threads = new Thread[20];
+        for (int i = 0; i < threads.length; i++) {
+            threads[i] = new Thread(() -> {
+                for (int j = 0; j < 50; j++) {
+                    memoizer.computeWith("concurrent", () -> { count.incrementAndGet(); sleep10ms(); return 10; });
+                }
+            });
+        }
+        for (final var t : threads) t.start();
+        for (final var t : threads) t.join();
+
+        assertThat(count).hasValue(1);
+        assertThat(memoizer.size()).isEqualTo(1);
+    }
+
+    // -------------------------------------------------------------------------
     // Construction
     // -------------------------------------------------------------------------
 

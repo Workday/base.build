@@ -65,6 +65,23 @@ public interface Memoizer<T, R> {
     R compute(T input);
 
     /**
+     * Returns the memoized result for {@code input}, computing it via {@code supplier} on the
+     * first call for a given input. Unlike {@link #compute(Object)}, the computation is not fixed
+     * to the memoizer's underlying {@link Function} — this allows callers who don't have (or don't
+     * want to construct) a {@code Function<T, R>} up front to still share the same cache, keyed by
+     * {@code input}.
+     * <p>
+     * {@code supplier} is only invoked on a cache miss; on a hit, the cached result is returned and
+     * {@code supplier} is never called. If two callers race on the same {@code input} with different
+     * suppliers, only one supplier's result is memoized — the other is discarded.
+     *
+     * @param input    the input; may be {@code null}
+     * @param supplier supplies the result on a cache miss; must not be {@code null}
+     * @return the memoized result; may be {@code null}
+     */
+    R computeWith(T input, Supplier<R> supplier);
+
+    /**
      * Clears all memoized results, forcing subsequent calls to recompute.
      */
     void clear();
