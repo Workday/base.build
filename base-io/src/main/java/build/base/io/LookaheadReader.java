@@ -171,7 +171,7 @@ public class LookaheadReader
      * available
      */
     private boolean prepare() {
-        return prepare(DEFAULT_LOOKAHEAD);
+        return prepare(1);
     }
 
     /**
