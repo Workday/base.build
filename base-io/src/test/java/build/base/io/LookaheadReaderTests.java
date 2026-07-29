@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -254,5 +255,35 @@ public class LookaheadReaderTests {
 
         assertThat(reader.consume(initialBufferSize * 2))
             .isEqualTo(Strings.repeat("a", initialBufferSize * 2));
+    }
+
+    // prepare() previously passed DEFAULT_LOOKAHEAD as the desired size even for single-character
+    // operations, so "remaining < desired" became true again after consuming just one character
+    // from a full buffer, forcing a fresh underlying read() on every single consume(). Asserting
+    // on the raw read() call count (rather than just consumed output) is what catches that.
+    @Test
+    void shouldNotRereadUnderlyingStreamForEverySingleCharacterConsumed() {
+        final var content = Strings.repeat("a", 10_000);
+        final var readCalls = new AtomicInteger();
+
+        final var reader = new LookaheadReader(new StringReader(content) {
+            @Override
+            public int read(char [] cbuf, int off, int len) throws IOException {
+                readCalls.incrementAndGet();
+                return super.read(cbuf, off, len);
+            }
+        });
+
+        int consumed = 0;
+        while (reader.available()) {
+            reader.consume();
+            consumed++;
+        }
+
+        assertThat(consumed)
+            .isEqualTo(content.length());
+
+        assertThat(readCalls.get())
+            .isLessThan(content.length() / 10);
     }
 }
