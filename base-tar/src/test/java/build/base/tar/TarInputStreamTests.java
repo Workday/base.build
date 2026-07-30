@@ -20,6 +20,7 @@ package build.base.tar;
  * #L%
  */
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -43,6 +44,27 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TarInputStreamTests {
 
     private static final long MOD_TIME = 0L;
+
+    /**
+     * macOS ships bsdtar as {@code tar}, which doesn't support the GNU {@code --sparse}
+     * flag this test relies on. Look for a real GNU tar under its usual names, preferring
+     * whatever {@code tar} already resolves to before falling back to {@code gtar}
+     * (the name Homebrew's {@code gnu-tar} installs under).
+     */
+    private static String findGnuTarBinary() {
+        for (final var candidate : new String[] {"tar", "gtar"}) {
+            try {
+                final var process = new ProcessBuilder(candidate, "--version").redirectErrorStream(true).start();
+                final var output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                if (process.waitFor() == 0 && output.contains("GNU tar")) {
+                    return candidate;
+                }
+            } catch (IOException | InterruptedException ignored) {
+                // candidate not on PATH — try the next one
+            }
+        }
+        return null;
+    }
 
     @Test
     void shouldReturnNullForEmptyArchive() throws IOException {
@@ -252,6 +274,10 @@ class TarInputStreamTests {
 
     @Test
     void shouldReadGnuSparseFile(@TempDir final Path tempDir) throws IOException, InterruptedException {
+        final var gnuTar = findGnuTarBinary();
+        Assumptions.assumeTrue(gnuTar != null, "no GNU tar binary found on PATH (macOS ships bsdtar as 'tar', "
+            + "which doesn't support --sparse the way this test needs)");
+
         final var sourceDir = tempDir.resolve("src");
         Files.createDirectories(sourceDir);
         final var sparsePath = sourceDir.resolve("sparse.bin");
@@ -264,7 +290,7 @@ class TarInputStreamTests {
         }
 
         final var archivePath = tempDir.resolve("sparse.tar");
-        final var result = new ProcessBuilder("tar", "--sparse", "-cf", archivePath.toString(),
+        final var result = new ProcessBuilder(gnuTar, "--sparse", "-cf", archivePath.toString(),
             "-C", sourceDir.toString(), "sparse.bin")
             .redirectErrorStream(true)
             .start();
