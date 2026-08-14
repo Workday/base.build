@@ -449,6 +449,17 @@ public final class Exceptional<T>
         return Objects.hash(this.value, this.exception);
     }
 
+    @Override
+    public String toString() {
+        if (this.value != null) {
+            return "Exceptional[" + this.value + "]";
+        } else if (this.exception != null) {
+            return "Exceptional[" + this.exception + "]";
+        } else {
+            return "Exceptional.empty";
+        }
+    }
+
     /**
      * Obtains the empty {@link Exceptional}, without a value and a {@link Exception}.
      *

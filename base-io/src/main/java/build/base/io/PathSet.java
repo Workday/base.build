@@ -178,7 +178,7 @@ public interface PathSet
 
         @Override
         public String toString() {
-            return "PathSet.empty()";
+            return "[]";
         }
     }
 }

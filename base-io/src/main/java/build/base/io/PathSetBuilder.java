@@ -216,5 +216,10 @@ public class PathSetBuilder {
         public int hashCode() {
             return Objects.hash(this.paths);
         }
+
+        @Override
+        public String toString() {
+            return this.paths.toString();
+        }
     }
 }
