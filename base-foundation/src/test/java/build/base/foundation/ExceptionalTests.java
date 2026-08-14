@@ -787,4 +787,19 @@ class ExceptionalTests {
                 .isEqualTo("Not supported mate");
         }
     }
+
+    /**
+     * Ensure {@link Exceptional#toString()} renders the value, exception, or empty state.
+     */
+    @Test
+    void shouldRenderToString() {
+        assertThat(Exceptional.of(42).toString())
+            .isEqualTo("Exceptional[42]");
+
+        assertThat(Exceptional.ofException(new IllegalStateException("boom")).toString())
+            .isEqualTo("Exceptional[java.lang.IllegalStateException: boom]");
+
+        assertThat(Exceptional.empty().toString())
+            .isEqualTo("Exceptional.empty");
+    }
 }

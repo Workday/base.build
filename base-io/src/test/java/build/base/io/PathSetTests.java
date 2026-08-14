@@ -279,4 +279,42 @@ class PathSetTests {
         assertThat(pathSet1.hashCode())
             .isEqualTo(pathSet2.hashCode());
     }
+
+    /**
+     * Ensure {@link PathSet#toString()} renders the contained {@link Path}s.
+     */
+    @Test
+    void shouldRenderToString() {
+        final var first = Paths.get("/usr/local/bin");
+        final var second = Paths.get("/usr/bin");
+
+        final var pathSet = PathSetBuilder
+            .create(first, second)
+            .build();
+
+        assertThat(pathSet.toString())
+            .isEqualTo(Stream.of(first, second).map(Path::toString).toList().toString());
+    }
+
+    /**
+     * Ensure an empty {@link PathSet#toString()} renders an empty list.
+     */
+    @Test
+    void shouldRenderEmptyToString() {
+        final var pathSet = PathSetBuilder
+            .create()
+            .build();
+
+        assertThat(pathSet.toString())
+            .isEqualTo("[]");
+    }
+
+    /**
+     * Ensure {@link PathSet#empty()} renders the same as an empty built {@link PathSet}.
+     */
+    @Test
+    void shouldRenderEmptyPathSetToString() {
+        assertThat(PathSet.empty().toString())
+            .isEqualTo("[]");
+    }
 }
