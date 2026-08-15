@@ -22,6 +22,7 @@ package build.base.telemetry;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.stream.Stream;
 
@@ -146,7 +147,7 @@ public interface Progress
                 return "[" + uri + "] "
                     + "[Progress] " + message
                     + " " + currentLabel + " of " + maximumLabel
-                    + " (" + percentage() + "%)";
+                    + String.format(Locale.ROOT, " (%.1f%%)", percentage());
             }
         };
     }

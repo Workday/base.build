@@ -51,4 +51,23 @@ class CompletedTests {
             .doesNotContain("hrs")
             .doesNotContain("mins");
     }
+
+    /**
+     * Verify a near-instantaneous (sub-millisecond) duration still renders an explicit millisecond
+     * component, e.g. "0 ms", rather than omitting the duration entirely.
+     */
+    @Test
+    void toStringShouldFormatNearInstantaneousDurationWithExplicitMillis() {
+        final var commenced = Instant.now();
+        final var completed = Completed.create(URI, null, commenced, "task");
+
+        final var text = completed.toString();
+
+        assertThat(text)
+            .containsPattern("\\(\\d+ ms\\)")
+            .doesNotContain("days")
+            .doesNotContain("hrs")
+            .doesNotContain("mins")
+            .doesNotContain("secs");
+    }
 }

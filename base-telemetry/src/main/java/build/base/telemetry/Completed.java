@@ -122,12 +122,13 @@ public interface Completed<T>
                 final long minutes = duration.toMinutes() % 60;
                 final long seconds = duration.getSeconds() % 60;
                 final long millis = duration.toMillis() % 1000;
+                final boolean showMillis = millis > 0 || duration.toMillis() == 0;
 
                 final String duration = (days > 0 ? days + " days " : "")
                     + (hours > 0 ? hours + " hrs " : "")
                     + (minutes > 0 ? minutes + " mins " : "")
                     + (seconds > 0 ? seconds + " secs " : "")
-                    + (millis > 0 ? millis + " ms" : "");
+                    + (showMillis ? millis + " ms" : "");
 
                 return "[" + uri + "] "
                     + "[Completed] " + message
