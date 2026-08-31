@@ -25,7 +25,6 @@
  */
 module build.base.option {
     requires transitive build.base.configuration;
-    requires build.base.foundation;
 
     exports build.base.option;
 }

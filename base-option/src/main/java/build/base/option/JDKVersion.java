@@ -9,9 +9,9 @@ package build.base.option;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,25 +22,29 @@ package build.base.option;
 
 import build.base.configuration.Default;
 import build.base.configuration.Option;
-import build.base.foundation.Strings;
 
 import java.io.DataInputStream;
 import java.io.InputStream;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Stream;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * Provides the ability to parse Java Development Kit (JDK) version numbers as defined by the
- * <a href="https://www.oracle.com/technetwork/java/javase/versioning-naming-139433.html">Legacy Version</a>
- * specification (prior to Java 9) and the new
- * <a href="https://docs.oracle.com/javase/9/docs/api/java/lang/Runtime.Version.html">Modern Version</a>
- * specification (from version 9 onwards), representing them as required by the new
- * <a href="http://openjdk.java.net/jeps/223">Versioning Scheme</a>, including dropping the 1 for legacy versions
- * when encountered.
+ * Parses Java Development Kit (JDK) version numbers.
+ * <p>
+ * Modern version strings (Java 9 and later, per {@link Runtime.Version}) are handed straight to
+ * {@link Runtime.Version#parse(String)}, which also provides the ordering via {@link #compareTo}.
+ * Legacy strings (the pre-Java-9
+ * <a href="https://www.oracle.com/technetwork/java/javase/versioning-naming-139433.html">scheme</a>,
+ * e.g. {@code 1.8.0_292-b10} or {@code 1.7.0-ea-b19}) are first normalized into the modern
+ * <a href="http://openjdk.java.net/jeps/223">JEP 223</a> form &mdash; the leading {@code 1.} is
+ * dropped, the legacy {@code _security} update is folded into the dotted version number (so
+ * {@code 1.8.0_292} becomes {@code 8.0.292}), and {@code -bNN} becomes {@code +NN}.
+ * <p>
+ * Note that {@link #toString()} returns this normalized, modern-scheme form rather than echoing
+ * the string passed to {@link #of(String)}; use {@link #get()} to recover the raw input.
  *
  * @author brian.oliver
  * @since Nov-2019
@@ -49,73 +53,26 @@ public final class JDKVersion
     implements Option, Comparable<JDKVersion> {
 
     /**
-     * The raw version {@link String}.
+     * Matches a legacy (pre-Java-9) version string such as {@code 1.8.0_292-b10}, {@code 1.9.0-b100},
+     * or {@code 1.7.0-ea-b19}, capturing (1) feature, (2) minor, (3) security, (4) build, (5) pre-release,
+     * and (6) build-after-pre-release.
+     */
+    private static final Pattern LEGACY = Pattern.compile(
+        "1\\.(\\d+)(?:\\.(\\d+))?(?:_(\\d+))?(?:-(?:b(\\d+)|([A-Za-z0-9]+)(?:-b(\\d+))?))?");
+
+    /**
+     * The raw version {@link String} as supplied to the factory method.
      */
     private final String rawVersion;
 
     /**
-     * The major version number.
+     * The parsed, modern-scheme version this instance delegates to.
      */
-    private final int major;
+    private final Runtime.Version version;
 
-    /**
-     * The minor version number.
-     */
-    private final int minor;
-
-    /**
-     * The security version number.
-     */
-    private final int security;
-
-    /**
-     * The build number, {@code null} if not present.
-     */
-    private final Integer build;
-
-    /**
-     * The pre-release information, {@code null} if not present.
-     */
-    private final String prerelease;
-
-    /**
-     * The version identifier, {@code null} if not present.
-     */
-    private final String identifier;
-
-    /**
-     * The numbers, in order of appearance, in the {@link JDKVersion}.
-     */
-    private final List<Integer> numbers;
-
-    /**
-     * Constructs a {@link JDKVersion}.
-     *
-     * @param rawVersion the raw version {@link String} from which the {@link JDKVersion} was parsed
-     * @param major      the major version
-     * @param minor      the minor version
-     * @param security   the security version
-     * @param build      the {@code null}able build number
-     * @param prerelease the {@code null}able pre-release
-     * @param numbers    the {@code null}able numbers in the {@link JDKVersion}
-     */
-    private JDKVersion(final String rawVersion,
-                       final int major,
-                       final int minor,
-                       final int security,
-                       final Integer build,
-                       final String prerelease,
-                       final String identifier,
-                       final Stream<Integer> numbers) {
-
+    private JDKVersion(final String rawVersion, final Runtime.Version version) {
         this.rawVersion = rawVersion;
-        this.major = major;
-        this.minor = minor;
-        this.security = security;
-        this.build = build;
-        this.prerelease = prerelease;
-        this.identifier = identifier;
-        this.numbers = numbers.toList();
+        this.version = version;
     }
 
     /**
@@ -128,30 +85,30 @@ public final class JDKVersion
     }
 
     /**
-     * Obtains the major version number.
+     * Obtains the feature (major) version number, e.g. {@code 25} for {@code 25.0.4}.
      *
-     * @return the major version number
+     * @return the feature version number
      */
     public int major() {
-        return this.major;
+        return this.version.feature();
     }
 
     /**
-     * Obtains the minor version number.
+     * Obtains the interim (minor) version number.
      *
-     * @return the minor version number
+     * @return the interim version number
      */
     public int minor() {
-        return this.minor;
+        return this.version.interim();
     }
 
     /**
-     * Obtains the security version number.
+     * Obtains the update (security) version number.
      *
-     * @return the security version number
+     * @return the update version number
      */
     public int security() {
-        return this.security;
+        return this.version.update();
     }
 
     /**
@@ -160,7 +117,7 @@ public final class JDKVersion
      * @return the {@link Optional} build number
      */
     public Optional<Integer> build() {
-        return Optional.ofNullable(this.build);
+        return this.version.build();
     }
 
     /**
@@ -169,25 +126,36 @@ public final class JDKVersion
      * @return the {@link Optional} pre-release information
      */
     public Optional<String> pre() {
-        return Optional.ofNullable(this.prerelease);
+        return this.version.pre();
     }
 
     /**
-     * Obtains the {@link Optional} identifier information.
+     * Obtains the {@link Optional} optional (additional build) information.
      *
-     * @return the {@link Optional} identifier information
+     * @return the {@link Optional} optional information
      */
     public Optional<String> optional() {
-        return Optional.ofNullable(this.identifier);
+        return this.version.optional();
     }
 
     /**
-     * Obtains an unmodifiable {@link List} of the integer numerals contained in the {@link JDKVersion}.
+     * Obtains the underlying {@link Runtime.Version} this instance delegates to.
      *
-     * @return a {@link List} of {@link Integer} numerals in the {@link JDKVersion}
+     * @return the {@link Runtime.Version}
+     */
+    public Runtime.Version runtimeVersion() {
+        return this.version;
+    }
+
+    /**
+     * Obtains an unmodifiable {@link List} of the integers making up the version number (the
+     * dotted sequence before any {@code -} or {@code +}). The build number is <em>not</em> included;
+     * obtain it via {@link #build()}.
+     *
+     * @return a {@link List} of {@link Integer} numerals
      */
     public List<Integer> version() {
-        return this.numbers;
+        return this.version.version();
     }
 
     /**
@@ -196,332 +164,148 @@ public final class JDKVersion
      * @return {@code true} if the {@link JDKVersion} is modular, {@code false} otherwise
      */
     public boolean isModular() {
-        return this.major >= 9;
+        return this.version.feature() >= 9;
     }
 
     @Override
     public boolean equals(final Object object) {
-        if (this == object) {
-            return true;
-        }
-
-        if (object == null || getClass() != object.getClass()) {
-            return false;
-        }
-
-        final var other = (JDKVersion) object;
-
-        return this.major == other.major &&
-            this.minor == other.minor &&
-            this.security == other.security &&
-            Objects.equals(this.build, other.build) &&
-            Objects.equals(this.prerelease, other.prerelease) &&
-            Objects.equals(this.identifier, other.identifier) &&
-            this.numbers.equals(other.numbers);
+        return object instanceof JDKVersion other && compareTo(other) == 0;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(
-            this.major, this.minor, this.security, this.build, this.prerelease, this.identifier, this.numbers);
+        // consistent with equals(), which is defined as compareTo() == 0: Runtime.Version.compareTo()
+        // and Runtime.Version.hashCode() take the same four components (version, pre, build, optional)
+        // into account, so equal instances necessarily hash alike
+        return this.version.hashCode();
     }
 
     @Override
     public String toString() {
-        final var builder = new StringBuilder();
-        builder.append(this.major);
-
-        // output the other numbers except the build number when there are positive numbers following
-        final var size = this.build == null ? this.numbers.size() : this.numbers.size() - 1;
-        for (int i = 1; i < size; i++) {
-            final int number = this.numbers.get(i);
-
-            // is a positive number following this number?
-            var positiveFollows = false;
-            for (int j = i + 1; j < size && !positiveFollows; j++) {
-                positiveFollows = this.numbers.get(j) > 0;
-            }
-
-            if (number > 0 || positiveFollows) {
-                builder.append(".");
-                builder.append(number);
-            }
-        }
-
-        if (this.prerelease != null) {
-            builder.append("-");
-            builder.append(this.prerelease);
-        }
-
-        if (this.build != null) {
-            builder.append("+");
-            builder.append(this.build);
-        }
-
-        if (this.identifier != null) {
-
-            if (this.prerelease == null && this.build == null) {
-                builder.append("+");
-            }
-
-            builder.append("-");
-            builder.append(this.identifier);
-        }
-
-        return builder.toString();
+        return this.version.toString();
     }
 
     @Override
     public int compareTo(final JDKVersion other) {
-        // determine the smallest number of numbers from this and the other version
-        final var thisSize = other.numbers.size();
-        final var otherSize = this.numbers.size();
-        final var size = Math.min(thisSize, otherSize);
-
-        // compare those numbers
-        for (int i = 0; i < size; i++) {
-            final var thisNumber = this.numbers.get(i);
-            final var otherNumber = other.numbers.get(i);
-            if (thisNumber != otherNumber) {
-                return thisNumber - otherNumber;
-            }
-        }
-        return thisSize - otherSize;
+        return this.version.compareTo(other.version);
     }
 
     /**
-     * Obtains the {@link JDKVersion} based on the {@code java.version} system property.
+     * Obtains the {@link JDKVersion} of the running JVM.
      *
      * @return the current {@link JDKVersion}
      */
     @Default
     public static JDKVersion current() {
-        return of(System.getProperty("java.version"));
+        return new JDKVersion(Runtime.version().toString(), Runtime.version());
     }
 
     /**
-     * Creates a {@link JDKVersion} for the specified major version number.
+     * Creates a {@link JDKVersion} for the specified feature (major) version number.
      * <p>
-     * For example, {@code JDKVersion.of(8)} produces a {@link JDKVersion} with a major version of 8.
+     * For example, {@code JDKVersion.of(8)} produces a {@link JDKVersion} with a feature version of 8.
      *
-     * @param major the major {@link JDKVersion} number
+     * @param major the feature {@link JDKVersion} number
      * @return a {@link JDKVersion}
      */
     public static JDKVersion of(final int major) {
-
-        final var list = new ArrayList<Integer>(3);
-        list.add(major);
-        list.add(0);
-        list.add(0);
-
-        final String rawVersion;
-        if (major < 9) {
-            // create a legacy version
-            rawVersion = "1." + major + ".0";
-        }
-        else {
-            // create a modern version
-            rawVersion = major + ".0.0";
-        }
-
-        return new JDKVersion(rawVersion, major, 0, 0, null, null, null, list.stream());
+        final var raw = Integer.toString(major);
+        return new JDKVersion(raw, Runtime.Version.parse(raw));
     }
 
     /**
-     * Obtains the {@link JDKVersion} by parsing the specified {@link String}.
+     * Obtains the {@link JDKVersion} by parsing the specified {@link String}, accepting both the
+     * modern ({@link Runtime.Version}) and legacy (pre-Java-9) schemes.
      *
      * @param version the version
      * @return a {@link JDKVersion}
-     * @throws NoSuchElementException should the version be invalid format
+     * @throws IllegalArgumentException if the version is {@code null}, blank, or cannot be parsed
      */
     public static JDKVersion of(final String version) {
 
-        if (Strings.isEmpty(version)) {
+        if (version == null || version.isBlank()) {
             throw new IllegalArgumentException("The specified version was empty or null");
         }
 
         final var rawVersion = version.trim();
 
         try {
-            final var numbers = new ArrayList<Integer>();
-
-            var position = 0;
-
-            final var majorString = Strings.collectWhile(rawVersion, position, Character::isDigit)
-                .orElseThrow(() -> new IllegalArgumentException("Expected Major Version Number ([0-9]+)"));
-
-            position += majorString.length();
-
-            int major = Integer.parseInt(majorString);
-            int minor = 0;
-            int security = 0;
-            Integer build = null;
-            String prerelease = null;
-            String identifier = null;
-
-            if (major == 1) {
-                // parse the legacy (non-modular) version specification (prior to version 9)
-                // according to https://www.oracle.com/technetwork/java/javase/versioning-naming-139433.html
-
-                if (Strings.follows(rawVersion, position, ".")) {
-                    position++;
-
-                    // for legacy versions, the minor version becomes the major version
-                    final var legacyMajorString = Strings.collectWhile(rawVersion, position, Character::isDigit)
-                        .orElseThrow(() -> new IllegalArgumentException("Expected Major Version Number ([0-9]+)"));
-
-                    position += legacyMajorString.length();
-                    major = Integer.parseInt(legacyMajorString);
-                }
-                numbers.add(major);
-
-                if (Strings.follows(rawVersion, position, ".")) {
-                    position++;
-
-                    final var minorString = Strings.collectWhile(rawVersion, position, Character::isDigit)
-                        .orElseThrow(() -> new IllegalArgumentException("Expected Minor Version Number ([0-9]+)"));
-
-                    position += minorString.length();
-                    minor = Integer.parseInt(minorString);
-                }
-                numbers.add(minor);
-
-                if (Strings.follows(rawVersion, position, "_")) {
-                    position++;
-
-                    final var securityString = Strings.collectWhile(rawVersion, position, Character::isDigit)
-                        .orElseThrow(() -> new IllegalArgumentException("Expected Security Number ([0-9]+)"));
-
-                    position += securityString.length();
-                    security = Integer.parseInt(securityString);
-                }
-                numbers.add(security);
-
-                if (Strings.follows(rawVersion, position, "-b")
-                    && Strings.follows(rawVersion, position + 2, Character::isDigit)) {
-
-                    position += 2;
-                    final var buildString = Strings.collectWhile(rawVersion, position, Character::isDigit)
-                        .orElseThrow(() -> new IllegalArgumentException("Expected Build Number ([0-9]+)"));
-
-                    position += buildString.length();
-                    build = Integer.parseInt(buildString);
-                    numbers.add(build);
-                }
-                else if (Strings.follows(rawVersion, position, "-")
-                    && Strings.follows(rawVersion, position + 1,
-                    Character::isLetterOrDigit)) {
-
-                    position += 1;
-
-                    prerelease = Strings.collectWhile(rawVersion, position, Character::isLetterOrDigit)
-                        .orElseThrow(() -> new IllegalArgumentException("Expected Prerelease Number ([a-zA-Z0-9]+)"));
-
-                    position += prerelease.length();
-
-                    if (Strings.follows(rawVersion, position, "-b")
-                        && Strings.follows(rawVersion, position + 2, Character::isDigit)) {
-
-                        position += 2;
-                        final var buildString = Strings.collectWhile(rawVersion, position, Character::isDigit)
-                            .orElseThrow(() -> new IllegalArgumentException("Expected Build Number ([0-9]+)"));
-
-                        position += buildString.length();
-                        build = Integer.parseInt(buildString);
-                        numbers.add(build);
-                    }
-                }
-            }
-            else {
-                // parse the new version specification (as of version 9)
-                // according to https://docs.oracle.com/javase/9/docs/api/java/lang/Runtime.Version.html
-
-                // include the major version as the first number
-                numbers.add(major);
-
-                // parse an arbitrary number parse digits
-                while (Strings.follows(rawVersion, position, ".")) {
-                    position++;
-
-                    final var numberString = Strings.collectWhile(rawVersion, position, Character::isDigit)
-                        .orElseThrow(() -> new IllegalArgumentException("Expected Number ([0-9]+)"));
-
-                    position += numberString.length();
-                    final var number = Integer.parseInt(numberString);
-                    numbers.add(number);
-                }
-
-                // the number after the major is the minor version
-                if (numbers.size() > 1) {
-                    minor = numbers.get(1);
-                }
-                else {
-                    numbers.add(minor);
-                }
-
-                // the number after the minor is the security version
-                if (numbers.size() > 2) {
-                    security = numbers.get(2);
-                }
-                else {
-                    numbers.add(security);
-                }
-
-                if (Strings.follows(rawVersion, position, "-")) {
-                    position++;
-
-                    prerelease = Strings.collectWhile(rawVersion, position, Character::isLetterOrDigit)
-                        .orElseThrow(() -> new IllegalArgumentException("Expected Prerelease Number ([a-zA-Z0-9]+)"));
-
-                    position += prerelease.length();
-
-                    if (Strings.follows(rawVersion, position, "-")) {
-                        identifier = Strings
-                            .collectWhile(rawVersion, position, c -> Character.isLetterOrDigit(c) || c == '-')
-                            .orElseThrow(
-                                () -> new IllegalArgumentException("Expected Identifier Number ([-a-zA-Z0-9]+)"));
-
-                        return new JDKVersion(rawVersion, major, minor, security, build, prerelease, identifier,
-                            numbers.stream());
-                    }
-                }
-
-                if (Strings.follows(rawVersion, position, "+")) {
-                    position++;
-
-                    final var buildString = Strings.collectWhile(rawVersion, position, Character::isDigit)
-                        .orElseThrow(() -> new IllegalArgumentException("Expected Build Number ([0-9]+)"));
-
-                    position += buildString.length();
-                    build = Integer.parseInt(buildString);
-                    numbers.add(build);
-
-                    if (Strings.follows(rawVersion, position, "-")) {
-                        identifier = Strings
-                            .collectWhile(rawVersion, position, c -> Character.isLetterOrDigit(c) || c == '-')
-                            .orElseThrow(
-                                () -> new IllegalArgumentException("Expected Identifier Number ([-a-zA-Z0-9]+)"));
-                    }
-
-                    return new JDKVersion(rawVersion, major, minor, security, build, prerelease, identifier,
-                        numbers.stream());
-                }
-
-                if (Strings.follows(rawVersion, position, "+-")) {
-                    position++;
-
-                    identifier = Strings
-                        .collectWhile(rawVersion, position, c -> Character.isLetterOrDigit(c) || c == '-')
-                        .orElseThrow(
-                            () -> new IllegalArgumentException("Expected Identifier Number ([-a-zA-Z0-9]+)"));
-                }
-            }
-
-            return new JDKVersion(rawVersion, major, minor, security, build, prerelease, identifier, numbers.stream());
+            return new JDKVersion(rawVersion, Runtime.Version.parse(normalize(rawVersion)));
         }
-        catch (final Exception e) {
-            throw new RuntimeException("Failed to parse version: " + rawVersion, e);
+        catch (final RuntimeException e) {
+            throw new IllegalArgumentException("Failed to parse version: " + rawVersion, e);
         }
+    }
+
+    /**
+     * Normalizes an arbitrary JDK version string into a form {@link Runtime.Version#parse(String)}
+     * accepts: legacy (pre-Java-9) {@code 1.x} strings are remapped to the modern scheme, and
+     * trailing zero elements of the version number (which {@link Runtime.Version} rejects but the
+     * legacy scheme and real-world tooling emit, e.g. {@code 9.0.0}) are dropped.
+     *
+     * @param raw the raw version string
+     * @return the normalized, modern-scheme version string
+     */
+    private static String normalize(final String raw) {
+        return stripTrailingZeroElements(raw.startsWith("1.") ? remapLegacy(raw) : raw);
+    }
+
+    /**
+     * Remaps a legacy {@code 1.x} version string to the modern scheme, dropping the leading
+     * {@code 1.} and translating {@code _security} to {@code .security} and {@code -bNN} to
+     * {@code +NN}. Strings that do not match the legacy shape are returned unchanged.
+     */
+    private static String remapLegacy(final String raw) {
+
+        final Matcher matcher = LEGACY.matcher(raw);
+        if (!matcher.matches()) {
+            return raw;
+        }
+
+        final int feature = Integer.parseInt(matcher.group(1));
+        final Integer minor = matcher.group(2) == null ? null : Integer.valueOf(matcher.group(2));
+        final Integer security = matcher.group(3) == null ? null : Integer.valueOf(matcher.group(3));
+        final String pre = matcher.group(5);
+        final String build = matcher.group(4) != null ? matcher.group(4) : matcher.group(6);
+
+        final var builder = new StringBuilder().append(feature);
+        if (security != null) {
+            builder.append('.').append(minor == null ? 0 : minor).append('.').append(security);
+        }
+        else if (minor != null && minor != 0) {
+            builder.append('.').append(minor);
+        }
+        if (pre != null) {
+            builder.append('-').append(pre);
+        }
+        if (build != null) {
+            builder.append('+').append(Integer.parseInt(build));
+        }
+        return builder.toString();
+    }
+
+    /**
+     * Drops trailing {@code .0} elements from the version-number portion (before any {@code -} or
+     * {@code +}), keeping at least the feature element, since {@link Runtime.Version} forbids them.
+     */
+    private static String stripTrailingZeroElements(final String version) {
+
+        int cut = version.length();
+        for (int i = 0; i < version.length(); i++) {
+            final char c = version.charAt(i);
+            if (c == '-' || c == '+') {
+                cut = i;
+                break;
+            }
+        }
+
+        final String[] elements = version.substring(0, cut).split("\\.", -1);
+        int end = elements.length;
+        while (end > 1 && elements[end - 1].equals("0")) {
+            end--;
+        }
+
+        return String.join(".", Arrays.copyOf(elements, end)) + version.substring(cut);
     }
 
     /**
