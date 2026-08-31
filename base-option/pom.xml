@@ -19,11 +19,6 @@
     <dependencies>
         <dependency>
             <groupId>build.base</groupId>
-            <artifactId>base-foundation</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>build.base</groupId>
             <artifactId>base-configuration</artifactId>
         </dependency>
 

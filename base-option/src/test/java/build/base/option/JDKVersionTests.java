@@ -8,6 +8,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -43,6 +44,7 @@ class JDKVersionTests {
             jdkVersion("9.0.1+20", "9.0.1+20", 9, 0, 1, 20, null, true),
             jdkVersion("9.1.2", "9.1.2", 9, 1, 2, null, null, true),
             jdkVersion("9.1.2+1", "9.1.2+1", 9, 1, 2, 1, null, true),
+            jdkVersion("25.0.4.1", "25.0.4.1", 25, 0, 4, null, null, true),
             jdkVersion("9.1.3+15", "9.1.3+15", 9, 1, 3, 15, null, true));
     }
 
@@ -153,6 +155,17 @@ class JDKVersionTests {
         assertThat(JDKVersion.of("1.2"))
             .isLessThan(JDKVersion.of("1.2.1"));
 
+        // a shorter version compares equal to the same version zero-padded, but below one with a
+        // positive trailing segment (e.g. an Azul $PATCH respin)
+        assertThat(JDKVersion.of("25.0.4"))
+            .isEqualByComparingTo(JDKVersion.of("25.0.4.0"));
+
+        assertThat(JDKVersion.of("25.0.4"))
+            .isLessThan(JDKVersion.of("25.0.4.1"));
+
+        assertThat(JDKVersion.of("25.0.4.1"))
+            .isGreaterThan(JDKVersion.of("25.0.4"));
+
         assertThat(JDKVersion.of("1.2"))
             .isLessThan(JDKVersion.of("1.3"));
 
@@ -164,6 +177,89 @@ class JDKVersionTests {
 
         assertThat(JDKVersion.of("9.0.0"))
             .isLessThan(JDKVersion.of("10"));
+    }
+
+    /**
+     * Ensure the optional (additional build) information is exposed.
+     */
+    @Test
+    void shouldExposeOptionalInformation() {
+        assertThat(JDKVersion.of("9.0.1+20-internal").optional())
+            .contains("internal");
+
+        assertThat(JDKVersion.of("9.0.1+20").optional())
+            .isEmpty();
+    }
+
+    /**
+     * Ensure {@link JDKVersion#version()} exposes the dotted version-number elements only, without
+     * the build number, and irrespective of the input scheme.
+     */
+    @Test
+    void shouldExposeVersionNumberElements() {
+        assertThat(JDKVersion.of("9.0.1+20").version())
+            .containsExactly(9, 0, 1);
+
+        assertThat(JDKVersion.of("1.9.0-b100").version())
+            .containsExactly(9);
+
+        assertThat(JDKVersion.of("25.0.4.1").version())
+            .containsExactly(25, 0, 4, 1);
+
+        assertThat(JDKVersion.of("1.8.0_292-b10").version())
+            .containsExactly(8, 0, 292);
+    }
+
+    /**
+     * Ensure {@link JDKVersion#get()} echoes the raw input while {@link JDKVersion#toString()}
+     * returns the normalized, modern-scheme form.
+     */
+    @Test
+    void shouldRetainRawVersionSeparatelyFromToString() {
+        final JDKVersion version = JDKVersion.of("1.8.0_292-b10");
+
+        assertThat(version.get())
+            .isEqualTo("1.8.0_292-b10");
+
+        assertThat(version.toString())
+            .isEqualTo("8.0.292+10");
+    }
+
+    /**
+     * Ensure {@link JDKVersion#equals(Object)} and {@link JDKVersion#hashCode()} stay consistent,
+     * including when two instances differ only in the optional (additional build) information or in
+     * trailing zero elements.
+     */
+    @Test
+    void shouldKeepEqualsAndHashCodeConsistent() {
+        final JDKVersion padded = JDKVersion.of("25.0.4.0");
+        final JDKVersion unpadded = JDKVersion.of("25.0.4");
+
+        assertThat(padded)
+            .isEqualTo(unpadded)
+            .hasSameHashCodeAs(unpadded);
+
+        final JDKVersion withOptional = JDKVersion.of("9.0.1+20-internal");
+        final JDKVersion withoutOptional = JDKVersion.of("9.0.1+20");
+
+        assertThat(withOptional)
+            .isNotEqualTo(withoutOptional);
+    }
+
+    /**
+     * Ensure invalid, blank, and {@code null} version strings are rejected with
+     * {@link IllegalArgumentException}.
+     */
+    @Test
+    void shouldRejectInvalidVersionStrings() {
+        assertThatThrownBy(() -> JDKVersion.of((String) null))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(() -> JDKVersion.of("   "))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(() -> JDKVersion.of("not-a-version"))
+            .isInstanceOf(IllegalArgumentException.class);
     }
 
     /**
